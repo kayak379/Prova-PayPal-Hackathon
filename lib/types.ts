@@ -70,5 +70,64 @@ export type Campaign = {
   orders: Order[]
   request?: string
   proposal?: Plan | null
+  funding?: FundingRequest[]
+  refunds?: PurchaseRefund[]
+  financeMessages?: FinanceMessage[]
+  verification?: FinanceVerification
+  financeOperations?: FinanceOperation[]
   audit: AuditEntry[]
+}
+
+export type FundingRequest = {
+  id: string
+  operationId: string
+  sponsor: string
+  email?: string
+  items: PlanItem[]
+  amountCents: number
+  receivedCents: number
+  status: string
+  paymentUrl?: string
+  qr?: string
+  mock?: boolean
+  createdAt: number
+  proof: string
+  error?: string
+}
+export type PurchaseRefund = {
+  id: string
+  orderId: string
+  captureId: string
+  amountCents: number
+  status: string
+  operationId: string
+  reason?: string
+  proof: string
+}
+export type FinanceAction = {
+  token: string
+  operationId: string
+  campaignId: string
+  kind: 'invoice' | 'refund'
+  amountCents: number
+  title: string
+  items?: PlanItem[]
+}
+export type FinanceOperation = {
+  id: string
+  action: FinanceAction
+  status: 'pending' | 'completed'
+  resultId?: string
+}
+export type FinanceMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  trace?: { tool: string; summary: string }[]
+  actions?: FinanceAction[]
+}
+export type FinanceVerification = {
+  at: number
+  findings: string[]
+  reporting: string
 }

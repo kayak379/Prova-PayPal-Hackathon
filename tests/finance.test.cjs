@@ -1,0 +1,457 @@
+const { test } = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('fs'),
+  path = require('path'),
+  ts = require('typescript'),
+  crypto = require('crypto')
+function load(file, mocks) {
+  const filename = path.resolve(file)
+  const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText
+  const mod = { exports: {} }
+  new Function('require', 'module', 'exports', code)(
+    (name) =>
+      mocks[name] ||
+      (name.startsWith('.')
+        ? load(path.resolve(path.dirname(filename), name) + '.ts', mocks)
+        : require(name)),
+    mod,
+    mod.exports,
+  )
+  return mod.exports
+}
+const sign = (x) => JSON.stringify(x)
+const common = { sign, verify: JSON.parse, env: () => 'test' }
+const item = {
+  id: 'water',
+  name: 'Water',
+  unitPrice: 2,
+  unitPriceCents: 200,
+  qty: 5,
+}
+const order = {
+  id: 'order1',
+  paypalTxn: 'capture1',
+  total: 10,
+  totalCents: 1000,
+  items: [item],
+}
+const campaign = () => ({
+  id: 'c1',
+  name: 'Emergency',
+  budget: 100,
+  orders: [order],
+  audit: [],
+  proposal: {
+    items: [item],
+    snapshot: sign({
+      kind: 'prices',
+      expires: Date.now() + 3600000,
+      products: [item],
+    }),
+  },
+})
+const paypalOrder = (refunds = []) => ({
+  id: 'order1',
+  status: 'COMPLETED',
+  purchase_units: [
+    {
+      items: [
+        {
+          name: 'Water',
+          quantity: '5',
+          unit_amount: { currency_code: 'USD', value: '2.00' },
+        },
+      ],
+      payments: {
+        captures: [
+          {
+            id: 'capture1',
+            amount: { currency_code: 'USD', value: '10.00' },
+            status: 'COMPLETED',
+          },
+        ],
+        refunds,
+      },
+    },
+  ],
+})
+function setup(handler) {
+  const calls = []
+  const paypal = async (name, args, key) => {
+    calls.push({ name, args, key })
+    return handler(name, args, key)
+  }
+  return {
+    ...load('lib/server/finance.ts', {
+      './common': common,
+      './paypal': { paypal, paypalRest: paypal },
+    }),
+    calls,
+  }
+}
+test('invoice preparation validates source quantities and excludes tax/shipping', async () => {
+  const s = setup(() => {}),
+    c = campaign()
+  const action = await s.prepareFinance(c, {
+    kind: 'invoice',
+    source: 'proposal',
+    sponsor: 'Sponsor',
+    items: [{ id: 'water', qty: 3 }],
+  })
+  assert.equal(action.amountCents, 600)
+  assert.equal(s.calls.length, 0)
+  await assert.rejects(
+    s.prepareFinance(c, {
+      kind: 'invoice',
+      source: 'proposal',
+      sponsor: 'Sponsor',
+      items: [{ id: 'water', qty: 6 }],
+    }),
+    /Invalid/,
+  )
+  await assert.rejects(
+    s.prepareFinance(c, {
+      kind: 'invoice',
+      source: 'proposal',
+      sponsor: 'Sponsor',
+      items: [{ id: 'invented', qty: 1 }],
+    }),
+    /Invalid/,
+  )
+})
+test('confirm creates a draft and resumes without duplicate invoice creation', async () => {
+  const s = setup((name) => {
+      assert.equal(name, 'create_invoice')
+      return { id: 'INV2-TEST' }
+    }),
+    c = campaign()
+  const a = await s.prepareFinance(c, {
+    kind: 'invoice',
+    source: 'proposal',
+    sponsor: 'Sponsor',
+    items: [{ id: 'water', qty: 2 }],
+  })
+  const r = await s.confirmFinance(c, a.token)
+  assert.equal(r.funding.status, 'DRAFT')
+  c.funding = [r.funding]
+  await s.confirmFinance(c, a.token)
+  assert.equal(s.calls.length, 1)
+  assert.equal(s.calls[0].key, a.operationId)
+})
+test('publication suppresses all email notifications and preserves invoice after QR failure', async () => {
+  let reads = 0
+  const s = setup((name) => {
+    if (name === 'get_invoice')
+      return {
+        status: reads++ ? 'UNPAID' : 'DRAFT',
+        amount: { value: '4.00' },
+        detail: {
+          metadata: {
+            recipient_view_url:
+              'https://www.sandbox.paypal.com/invoice/payerView/details/test',
+          },
+        },
+      }
+    if (name === 'send_invoice') return {}
+    throw Error('QR unavailable')
+  })
+  const c = campaign()
+  c.funding = [
+    {
+      id: 'inv1',
+      operationId: 'op1',
+      proof: sign({ kind: 'invoice', campaignId: c.id, id: 'inv1' }),
+      amountCents: 400,
+      receivedCents: 0,
+    },
+  ]
+  const result = await s.refreshInvoice(c, 'inv1', true)
+  assert.equal(result.status, 'UNPAID')
+  assert.equal(result.receivedCents, 0)
+  assert.match(result.error, /QR unavailable/)
+  const call = s.calls.find((c) => c.name === 'send_invoice')
+  assert.equal(call.args.send_to_recipient, false)
+  assert.equal(call.args.send_to_invoicer, false)
+})
+test('refund preparation verifies capture and rejects over-refunds', async () => {
+  const s = setup(() =>
+    paypalOrder([{ id: 'r1', status: 'PENDING', amount: { value: '3.00' } }]),
+  )
+  const c = campaign()
+  const a = await s.prepareFinance(c, {
+    kind: 'refund',
+    orderId: 'order1',
+    full: true,
+  })
+  assert.equal(a.amountCents, 700)
+  await assert.rejects(
+    s.prepareFinance(c, {
+      kind: 'refund',
+      orderId: 'order1',
+      amountCents: 701,
+    }),
+    /Refund must/,
+  )
+  await assert.rejects(
+    s.prepareFinance(c, { kind: 'refund', orderId: 'other', full: true }),
+    /outside/,
+  )
+})
+test('refund confirmation uses exact cents, idempotency and deduplicates completed local operation', async () => {
+  const s = setup((name) =>
+    name === 'get_order'
+      ? paypalOrder()
+      : {
+          id: 'r1',
+          status: 'COMPLETED',
+          amount: { currency_code: 'USD', value: '2.00' },
+        },
+  )
+  const c = campaign()
+  const a = await s.prepareFinance(c, {
+    kind: 'refund',
+    orderId: 'order1',
+    amountCents: 200,
+  })
+  const result = await s.confirmFinance(c, a.token)
+  assert.equal(result.refund.amountCents, 200)
+  assert.equal(
+    s.calls.find((c) => c.name === 'create_refund').key,
+    a.operationId,
+  )
+  c.refunds = [result.refund]
+  await s.confirmFinance(c, a.token)
+  assert.equal(s.calls.filter((c) => c.name === 'create_refund').length, 1)
+})
+test('changed availability rejects a refund before writing', async () => {
+  let refunded = false
+  const s = setup((name) =>
+    name === 'get_order'
+      ? paypalOrder(
+          refunded
+            ? [{ id: 'r1', status: 'COMPLETED', amount: { value: '9.00' } }]
+            : [],
+        )
+      : { id: 'r1', invoice_id: 'different-operation' },
+  )
+  const c = campaign()
+  const a = await s.prepareFinance(c, {
+    kind: 'refund',
+    orderId: 'order1',
+    amountCents: 200,
+  })
+  refunded = true
+  await assert.rejects(s.confirmFinance(c, a.token), /exceeds/)
+  assert.equal(s.calls.filter((c) => c.name === 'create_refund').length, 0)
+})
+test('expired or cross-campaign actions never execute', async () => {
+  const s = setup(() => {}),
+    c = campaign()
+  await assert.rejects(
+    s.confirmFinance(c, sign({ campaignId: c.id, expires: 0 })),
+    /expired/,
+  )
+  await assert.rejects(
+    s.confirmFinance(
+      c,
+      sign({ campaignId: 'other', expires: Date.now() + 1000 }),
+    ),
+    /another/,
+  )
+  assert.equal(s.calls.length, 0)
+})
+test('only completed refunds reduce spending; funding never increases budget', () => {
+  const { financeTotals } = load('lib/finance.ts', {})
+  const c = campaign()
+  c.refunds = [
+    { id: 'r1', status: 'COMPLETED', amountCents: 200 },
+    { id: 'r1', status: 'COMPLETED', amountCents: 200 },
+    { id: 'r2', status: 'PENDING', amountCents: 300 },
+    { id: 'r3', status: 'FAILED', amountCents: 100 },
+  ]
+  c.funding = [{ id: 'f1', receivedCents: 5000 }]
+  assert.deepEqual(financeTotals(c), {
+    gross: 1000,
+    refunds: 200,
+    net: 800,
+    remaining: 9200,
+    funding: 5000,
+  })
+})
+test('reconciliation flags mismatches and reporting unavailability', async () => {
+  const s = setup((name) => {
+    if (name === 'get_order') return paypalOrder()
+    throw Error('reporting unavailable')
+  })
+  const c = campaign()
+  c.orders = [{ ...order, totalCents: 999 }]
+  const result = await s.reconcile(c)
+  assert.match(result.verification.findings[0], /mismatch/)
+  assert.match(result.verification.reporting, /Unavailable/)
+})
+test('assistant uses native tools but preparation never confirms writes', async () => {
+  let round = 0
+  const calls = []
+  const mocks = {
+    './common': {
+      ...common,
+      external: async (url, req) => {
+        const b = JSON.parse(req.body)
+        assert(b.tools)
+        return round++
+          ? { choices: [{ message: { content: 'Review the refund action.' } }] }
+          : {
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    tool_calls: [
+                      {
+                        id: 'tool1',
+                        type: 'function',
+                        function: {
+                          name: 'prepare_refund',
+                          arguments: JSON.stringify({
+                            orderId: 'order1',
+                            amountCents: 200,
+                          }),
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }
+      },
+    },
+    './finance': {
+      prepareFinance: async (c, args) => {
+        calls.push(args)
+        return { title: 'Refund', amountCents: 200 }
+      },
+      orderDetails: async () => {},
+      refreshInvoice: async () => {},
+      refreshRefund: async () => {},
+      reconcile: async () => {},
+    },
+  }
+  const { financeChat } = load('lib/server/finance-agent.ts', mocks)
+  const result = await financeChat(campaign(), 'Prepare a $2 refund')
+  assert.equal(calls.length, 1)
+  assert.equal(result.actions.length, 1)
+  assert.equal(result.trace[0].tool, 'prepare_refund')
+  assert.match(result.trace[0].summary, /confirmation required/)
+})
+test('assistant tool execution stops at eight calls', async () => {
+  let calls = 0
+  const tools = Array.from({ length: 12 }, (_, i) => ({
+    id: String(i),
+    type: 'function',
+    function: { name: 'order_status', arguments: '{"id":"order1"}' },
+  }))
+  const { financeChat } = load('lib/server/finance-agent.ts', {
+    './common': {
+      ...common,
+      external: async () => ({
+        choices: [{ message: { role: 'assistant', tool_calls: tools } }],
+      }),
+    },
+    './finance': {
+      orderDetails: async () => {
+        calls++
+        return {
+          order: paypalOrder(),
+          capture: { amount: { value: '10.00' } },
+          remaining: 1000,
+          refunds: [],
+        }
+      },
+    },
+  })
+  const result = await financeChat(campaign(), 'Check status')
+  assert.equal(calls, 8)
+  assert.equal(result.trace.length, 8)
+  assert.match(result.text, /limit/)
+})
+
+test('assistant cannot execute a financial write tool', async () => {
+  const { financeChat } = load('lib/server/finance-agent.ts', {
+    './common': {
+      ...common,
+      external: async () => ({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              tool_calls: [
+                {
+                  id: 'x',
+                  type: 'function',
+                  function: { name: 'create_refund', arguments: '{}' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    },
+    './finance': {},
+  })
+  const result = await financeChat(campaign(), 'Refund immediately')
+  assert(result.trace.every((t) => t.summary === 'Tool not allowed.'))
+  assert.equal(result.actions.length, 0)
+})
+test('minimal refund responses are hydrated before recording amounts', async () => {
+  const s = setup((name) =>
+    name === 'get_order'
+      ? paypalOrder()
+      : name === 'create_refund'
+        ? { id: 'r1', status: 'COMPLETED' }
+        : {
+            id: 'r1',
+            status: 'COMPLETED',
+            amount: { currency_code: 'USD', value: '1.00' },
+          },
+  )
+  const c = campaign()
+  const a = await s.prepareFinance(c, {
+    kind: 'refund',
+    orderId: 'order1',
+    amountCents: 100,
+  })
+  const result = await s.confirmFinance(c, a.token)
+  assert.equal(result.refund.amountCents, 100)
+  assert(s.calls.some((c) => c.name === 'get_refund'))
+})
+
+test('paid invoice records only verified received funding', async () => {
+  const s = setup(() => ({
+    status: 'PAID',
+    amount: { value: '4.00' },
+    payments: { paid_amount: { value: '4.00' } },
+  }))
+  const c = campaign()
+  c.funding = [
+    {
+      id: 'inv1',
+      operationId: 'op1',
+      proof: sign({
+        kind: 'invoice',
+        campaignId: c.id,
+        id: 'inv1',
+        amountCents: 400,
+      }),
+      amountCents: 400,
+      receivedCents: 0,
+    },
+  ]
+  const result = await s.refreshInvoice(c, 'inv1')
+  assert.equal(result.receivedCents, 400)
+  assert.equal(result.status, 'PAID')
+  assert.equal(result.error, undefined)
+})

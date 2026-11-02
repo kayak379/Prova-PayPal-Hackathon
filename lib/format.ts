@@ -1,3 +1,4 @@
+import { financeTotals } from './finance'
 import type { Campaign, Plan } from './types'
 
 const currency = new Intl.NumberFormat('en-US', {
@@ -22,7 +23,8 @@ export const uid = (prefix = '') =>
 export const token = (prefix: string, len = 17) => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
   let out = ''
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  for (let i = 0; i < len; i++)
+    out += chars[Math.floor(Math.random() * chars.length)]
   return `${prefix}${out}`
 }
 
@@ -33,7 +35,7 @@ export function planTotals(plan: Plan) {
 }
 
 export function campaignSpent(c: Campaign) {
-  return c.orders.reduce((s, o) => s + o.total, 0)
+  return financeTotals(c).net / 100
 }
 
 export function timeAgo(ts: number) {
