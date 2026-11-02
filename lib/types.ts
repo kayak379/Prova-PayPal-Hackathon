@@ -38,6 +38,7 @@ export type Plan = {
 export type OrderStatus = 'confirmed' | 'processing' | 'shipped' | 'delivered'
 
 export type Order = {
+  approvedTotalCents?: number
   mock?: boolean
   id: string
   paypalTxn: string
@@ -108,6 +109,8 @@ export type PurchaseRefund = {
   proof: string
 }
 export type FinanceAction = {
+  orderId?: string
+  captureId?: string
   emailInvoice?: boolean
   email?: string
   token: string

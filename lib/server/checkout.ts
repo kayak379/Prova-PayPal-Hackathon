@@ -41,5 +41,5 @@ export async function captureCheckout(body: any) {
  if (order.status !== 'COMPLETED' || capture?.status !== 'COMPLETED') throw new Error('Payment is not completed. Approve it in PayPal, then retry verification.')
  if (capture.amount?.currency_code !== 'USD' || Math.round(Number(capture.amount.value) * 100) !== ticket.totalCents) throw new Error('Payment amount does not match the approved proposal.')
  const receipt: Order = { id: ticket.orderId, paypalTxn: capture.id, supplier: 'Sandbox purchase · ' + new Set(ticket.items.map(p => p.supplier)).size + ' retailers', items: ticket.items, total: ticket.totalCents / 100, totalCents: ticket.totalCents, status: 'confirmed', sandbox: true, mock: !!ticket.mock, createdAt: Date.parse(capture.create_time) || Date.now() }
- return { campaignId: ticket.campaignId, receipt }
+ return { campaignId: ticket.campaignId, receipt: { ...receipt, approvedTotalCents: ticket.totalCents } }
 }

@@ -7,7 +7,8 @@ import { Card, inputClass, Pressable, PressableLink } from '../kit'
 import { Modal } from '../modal'
 import { PayPalWordmark } from '../brand'
 import { spring } from '../motion-provider'
-import { planTotals, usd } from '@/lib/format'
+import { usdPrecise as usd } from '@/lib/format'
+import { financeTotals } from '@/lib/finance'
 import { useStore } from '@/lib/store'
 import type { Order, Plan } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -29,22 +30,34 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
  const [pending, setPending] = useState<Pending | null>(null); const started = useRef(false)
  const [savedEmail, setSavedEmail] = useState('')
  const [approveOpen, setApproveOpen] = useState(false)
+ const [paymentStage, setPaymentStage] = useState('')
+ const paymentLock = useRef(false)
+ const captureLock = useRef(false)
  const key = 'prova-payment-' + existingId
  const totals = totalsCents(plan.items)
  const groups = [...new Set(plan.items.map(p => p.supplier))]
  useEffect(() => { void paypalSDK().catch(() => {}); fetch('/api/paypal/vault').then(r => r.json()).then(wallet => setSavedEmail(wallet.saved ? wallet.email : '')).catch(() => {}) }, [])
  const callbacks = useRef({ onPayingChange, onPaymentComplete }); callbacks.current = { onPayingChange, onPaymentComplete }
  async function capture(payment: Pending) {
+  if (captureLock.current) return
+  captureLock.current = true
+  setPaymentStage('Verifying the captured amount with PayPal…')
   setBusy(true); setError(''); callbacks.current.onPayingChange(true)
   try {
    const result = await post('/api/checkout/capture', payment)
    if (result.campaignId !== existingId) throw new Error('Payment belongs to another campaign.')
+   // Save the verified receipt before removing the recovery ticket.
+   const raw = localStorage.getItem('prova-workspace-v1')
+   if (!raw) throw new Error('Payment verified, but workspace could not be saved. Keep this page open and retry verification.')
+   const workspace = JSON.parse(raw)
+   workspace.campaigns = workspace.campaigns.map((c: any) => c.id === result.campaignId ? { ...c, proposal: null, orders: [...c.orders.filter((o: Order) => o.id !== result.receipt.id), result.receipt] } : c)
+   localStorage.setItem('prova-workspace-v1', JSON.stringify(workspace))
    addOrders(result.campaignId, [result.receipt], [{ at: Date.now(), actor: 'user', message: 'Approved proposal through PayPal sandbox' }, { at: Date.now(), actor: 'paypal', message: `Sandbox payment captured · ${result.receipt.paypalTxn} · fulfillment simulated` }])
    saveProposal(result.campaignId, campaigns.find(c => c.id === existingId)?.request || '', null)
    localStorage.removeItem('prova-attempt-' + existingId); localStorage.removeItem(key); setPending(null); setReceipt(result.receipt); callbacks.current.onPaymentComplete(true)
    window.history.replaceState(null, '', `/campaigns/new?campaign=${existingId}`)
   } catch (e) { setError(e instanceof Error ? e.message : 'Payment verification failed') }
-  finally { setBusy(false); callbacks.current.onPayingChange(false) }
+  finally { captureLock.current = false; paymentLock.current = false; setBusy(false); callbacks.current.onPayingChange(false) }
  }
  useEffect(() => {
   if (started.current) return; started.current = true
@@ -63,17 +76,22 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
   if (!eligible.isEligible('paypal')) throw new Error('PayPal is unavailable in this browser.')
   const session = sdk.createPayPalOneTimePaymentSession({
    onApprove: async ({ orderId }) => { if (orderId !== payment.orderId) throw new Error('Payment order mismatch.'); await capture(payment) },
-   onCancel: () => { localStorage.removeItem(key); setPending(null); setBusy(false); onPayingChange(false); setError('PayPal approval was cancelled. You can retry.') },
-   onError: () => { setBusy(false); onPayingChange(false); setError('PayPal approval failed. Please resume or verify your payment.') }
+   onCancel: () => { localStorage.removeItem(key); localStorage.removeItem('prova-attempt-' + existingId); setPending(null); paymentLock.current = false; setBusy(false); onPayingChange(false); setError('PayPal approval was cancelled. You can retry.') },
+   onError: () => { paymentLock.current = false; setBusy(false); onPayingChange(false); setError('PayPal approval failed. Please resume or verify your payment.') }
   })
   await session.start({ presentationMode: 'modal' }, Promise.resolve({ orderId: payment.orderId }))
  }
  async function resumePayment() {
-  if (!pending) return
+  if (!pending || paymentLock.current) return
+  paymentLock.current = true
+  setPaymentStage('Waiting for PayPal approval…')
   setBusy(true); setError(''); onPayingChange(true)
-  try { await approvePayment(pending) } catch (e) { setBusy(false); onPayingChange(false); setError(e instanceof Error ? e.message : 'PayPal approval failed') }
+  try { await approvePayment(pending) } catch (e) { paymentLock.current = false; setBusy(false); onPayingChange(false); setError(e instanceof Error ? e.message : 'PayPal approval failed') }
  }
  async function pay() {
+  if (paymentLock.current) return
+  paymentLock.current = true
+  setPaymentStage('Creating your sandbox payment…')
   setBusy(true); setError(''); onPayingChange(true)
   try {
    if (!existingId) throw new Error('Save the campaign before checkout.')
@@ -90,22 +108,21 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
    localStorage.setItem('prova-workspace-v1', JSON.stringify(workspace))
    localStorage.setItem(key, JSON.stringify(payment)); setPending(payment)
    if (result.requiresApproval === false) await capture(payment)
-   else await approvePayment(payment)
-  } catch (e) { setError(e instanceof Error ? e.message : 'Checkout failed'); setBusy(false); onPayingChange(false) }
+   else { setPaymentStage('Waiting for PayPal approval…'); await approvePayment(payment) }
+  } catch (e) { paymentLock.current = false; setError(e instanceof Error ? e.message : 'Checkout failed'); setBusy(false); onPayingChange(false) }
  }
  const phase = receipt ? 'done' : busy ? 'processing' : 'ready'
  const suppliers = groups
  const total = totals.total / 100
- const progress = 0
  const orders: Order[] = receipt ? [receipt] : groups.map(supplier => ({ id: supplier, supplier, items: plan.items.filter(p => p.supplier === supplier), paypalTxn: 'Awaiting PayPal', total: plan.items.filter(p => p.supplier === supplier).reduce((sum, p) => sum + p.unitPrice * p.qty, 0), status: 'processing', createdAt: Date.now() }))
  const authorize = () => { setApproveOpen(false); void pay() }
- if (receipt && existingId) return <Receipt orders={[receipt]} total={receipt.total} campaignId={existingId} />
+ if (receipt && existingId) return <Receipt orders={[receipt]} total={receipt.total} campaignId={existingId} remainingCents={campaigns.find(c => c.id === existingId) ? financeTotals(campaigns.find(c => c.id === existingId)!).remaining : undefined} />
   return (
     <div className="flex flex-col gap-6">
       {plan.mock && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Mock data — sandbox checkout</p><p>Products and prices are sample data. PayPal will process a real sandbox test transaction; no goods will be ordered.</p></div>}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {pending && !busy && <div className="flex gap-3"><Pressable size="sm" onClick={() => capture(pending)}>Verify payment</Pressable><button type="button" className="text-sm underline" onClick={resumePayment}>Resume PayPal approval</button></div>}
-      <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">{phase === 'processing' ? 'Placing orders' : 'Checkout'}</h1>
+      <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">{phase === 'processing' ? 'Completing payment' : 'Checkout'}</h1>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         <Card className="overflow-hidden">
@@ -113,27 +130,12 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
             {(phase === 'processing' ? orders.map((o) => o.supplier) : suppliers).map((s, i) => {
               const items = plan.items.filter((it) => it.supplier === s)
               const sub = phase === 'processing' ? orders[i].total : items.reduce((a, it) => a + it.qty * it.unitPrice, 0)
-              const stage = phase === 'processing' ? Math.max(0, Math.min(3, progress - i * 3)) : -1
               return (
                 <li key={s} className="flex items-center gap-4 border-b border-border px-5 py-4 last:border-0">
-                  <SupplierStatus stage={stage} />
+                  <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-border"><ShieldCheck className="size-4" /></span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{s}</p>
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.p
-                        key={stage}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="truncate text-xs text-muted-foreground"
-                      >
-                        {stage === -1 && items.map((it) => `${it.qty.toLocaleString()} × ${it.name}`).join(', ')}
-                        {stage === 0 && 'Queued'}
-                        {stage === 1 && 'Creating purchase order…'}
-                        {stage === 2 && 'Authorizing with PayPal…'}
-                        {stage === 3 && <span className="font-mono">{orders[i].paypalTxn}</span>}
-                      </motion.p>
-                    </AnimatePresence>
+                    <p className="text-xs text-muted-foreground">{items.map(it => `${it.qty.toLocaleString()} × ${it.name}`).join(', ')}</p>
                   </div>
                   <span className="text-sm tabular">{usd(sub)}</span>
                 </li>
@@ -174,17 +176,9 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
             </p>
 
             {phase === 'processing' ? (
-              <div className="mt-5">
-                <div className="h-11 overflow-hidden rounded-full bg-muted">
-                  <motion.div
-                    className="flex h-full origin-left items-center rounded-full bg-paypal-blue"
-                    animate={{ scaleX: Math.max(0.06, progress / (orders.length * 3)) }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                  />
-                </div>
-                <p className="mt-2 text-center text-xs text-muted-foreground tabular">
-                  {Math.min(orders.length, Math.floor(progress / 3))} of {orders.length} confirmed
-                </p>
+              <div role="status" className="mt-5 flex items-center gap-3 rounded-xl bg-muted p-4">
+                <Loader2 className="size-5 shrink-0 animate-spin" />
+                <p className="text-sm">{paymentStage}</p>
               </div>
             ) : (
               <>
@@ -215,31 +209,6 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
   )
 }
 
-function SupplierStatus({ stage }: { stage: number }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors duration-300',
-        stage === 3 ? 'border-success bg-success text-white' : stage > 0 ? 'border-paypal-blue text-paypal-blue' : 'border-border text-muted-foreground',
-      )}
-    >
-      <AnimatePresence mode="popLayout" initial={false}>
-        {stage === 3 ? (
-          <motion.span key="c" initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={spring}>
-            <Check className="size-4" strokeWidth={3} />
-          </motion.span>
-        ) : stage > 0 ? (
-          <motion.span key="l" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}>
-            <Loader2 className="size-4 animate-spin" />
-          </motion.span>
-        ) : (
-          <motion.span key="d" exit={{ scale: 0 }} className="size-1.5 rounded-full bg-current" />
-        )}
-      </AnimatePresence>
-    </span>
-  )
-}
-
 function ApproveForm({ total, count, onApprove }: { total: number; count: number; onApprove: () => void }) {
   const [value, setValue] = useState('')
   const match = value.trim().toLowerCase() === PHRASE.toLowerCase()
@@ -252,8 +221,8 @@ function ApproveForm({ total, count, onApprove }: { total: number; count: number
       className="flex flex-col gap-4"
     >
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Prova will place {count} {count === 1 ? 'order' : 'orders'} totaling{' '}
-        <span className="font-medium text-foreground tabular">{usd(total)}</span> through your PayPal Business account.
+        Approve one PayPal sandbox payment of{' '}
+        <span className="font-medium text-foreground tabular">{usd(total)}</span> for supplies from {count} {count === 1 ? 'retailer' : 'retailers'}. Fulfillment is simulated; no goods will be ordered.
       </p>
       <div>
         <label htmlFor="approve" className="mb-2 block text-[13px] font-medium text-muted-foreground">
@@ -296,7 +265,7 @@ function ApproveForm({ total, count, onApprove }: { total: number; count: number
   )
 }
 
-function Receipt({ orders, total, campaignId }: { orders: Order[]; total: number; campaignId: string }) {
+function Receipt({ orders, total, campaignId, remainingCents }: { orders: Order[]; total: number; campaignId: string; remainingCents?: number }) {
   return (
     <div className="flex flex-col items-center gap-8 py-6 text-center">
       <motion.span
@@ -311,13 +280,20 @@ function Receipt({ orders, total, campaignId }: { orders: Order[]; total: number
         </motion.span>
       </motion.span>
       <div>
-        <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Payment complete</h1>
+        <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Payment verified</h1>
+        <p className="mt-2 text-sm text-muted-foreground">PayPal sandbox · Fulfillment simulated · No goods ordered</p>
         {orders.some(order => order.mock) && <p className="mt-2 text-sm text-muted-foreground">Mock product data · PayPal sandbox transaction · no goods ordered</p>}
         <p className="mt-2 text-muted-foreground tabular">
           {usd(total)} · {orders.length} {orders.length === 1 ? 'order' : 'orders'} via PayPal
         </p>
       </div>
       <Card className="w-full max-w-lg overflow-hidden text-left">
+        <dl className="grid grid-cols-2 gap-4 border-b border-border p-5 text-sm">
+          <div><dt className="text-muted-foreground">Approved amount</dt><dd className="mt-1 font-medium tabular">{usd(orders.reduce((sum, order) => sum + (order.approvedTotalCents ?? order.totalCents ?? Math.round(order.total * 100)), 0) / 100)}</dd></div>
+          <div><dt className="text-muted-foreground">Verified capture</dt><dd className="mt-1 font-medium tabular">{usd(total)} · COMPLETED</dd></div>
+          <div><dt className="text-muted-foreground">Budget used by this purchase</dt><dd className="mt-1 font-medium tabular">{usd(total)}</dd></div>
+          {remainingCents !== undefined && <div><dt className="text-muted-foreground">Campaign budget remaining</dt><dd className="mt-1 font-medium tabular">{usd(remainingCents / 100)}</dd></div>}
+        </dl>
         <ul>
           {orders.map((o, i) => (
             <motion.li
@@ -328,8 +304,8 @@ function Receipt({ orders, total, campaignId }: { orders: Order[]; total: number
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium">{o.supplier}</p>
-                <p className="truncate font-mono text-xs text-muted-foreground">
-                  {o.id} · {o.paypalTxn}
+                <p className="break-all font-mono text-xs text-muted-foreground">
+                  Order: {o.id}<br />Capture: {o.paypalTxn}
                 </p>
               </div>
               <span className="text-sm tabular">{usd(o.total)}</span>
@@ -337,8 +313,8 @@ function Receipt({ orders, total, campaignId }: { orders: Order[]; total: number
           ))}
         </ul>
       </Card>
-      <PressableLink href={`/campaigns/${campaignId}`} size="lg">
-        View campaign <ArrowRight />
+      <PressableLink href={`/campaigns/${campaignId}#finance`} size="lg">
+        Manage payment & refunds <ArrowRight />
       </PressableLink>
     </div>
   )

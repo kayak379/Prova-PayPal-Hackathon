@@ -3,7 +3,7 @@
 import { motion } from 'motion/react'
 import { ChevronLeft, Download, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AnimatedNumber, Pressable, PressableLink } from '../kit'
 import { Modal } from '../modal'
 import { CampaignSettings } from './campaign-settings'
@@ -22,6 +22,12 @@ const TABS = ['Orders', 'Funding', 'Finance', 'Audit log'] as const
 export function CampaignDetail({ id }: { id: string }) {
   const { campaigns, folders } = useStore()
   const [tab, setTab] = useState<(typeof TABS)[number]>('Orders')
+  useEffect(() => {
+    const selectFinance = () => { if (window.location.hash === '#finance') setTab('Finance') }
+    selectFinance()
+    window.addEventListener('hashchange', selectFinance)
+    return () => window.removeEventListener('hashchange', selectFinance)
+  }, [])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const fmt = useCallback((n: number) => usd(n), [])
   const count = useCallback((n: number) => Math.round(n).toString(), [])
