@@ -6,6 +6,7 @@ import { useCallback } from 'react'
 import { AnimatedNumber, PressableLink } from '../kit'
 import { FolderGroup } from './folder-group'
 import { NewFolderButton } from './new-folder-button'
+import { DashboardGraphic } from './dashboard-graphic'
 import { campaignSpent, usd } from '@/lib/format'
 import { useStore } from '@/lib/store'
 
@@ -36,21 +37,24 @@ export function Dashboard() {
         </div>
       </div>
 
-      <dl className="mt-8 grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border bg-border">
-        {stats.map((s, i) => (
-          <motion.div
-            key={s.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }}
-            className="bg-card px-5 py-4"
-          >
-            <dt className="text-xs text-muted-foreground">{s.label}</dt>
-            <dd className="mt-1 text-2xl font-medium tracking-tight">
-              <AnimatedNumber value={s.value} format={s.format} />
-            </dd>
-          </motion.div>
-        ))}
-      </dl>
+      <div className="mt-8 grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+        <DashboardGraphic />
+        <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border bg-border">
+          {stats.map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }}
+              className="flex min-w-0 flex-col justify-center bg-card px-3 py-5 sm:px-5"
+            >
+              <dt className="text-xs text-muted-foreground">{s.label}</dt>
+              <dd className="mt-2 break-words text-xl font-medium tracking-tight sm:text-2xl">
+                <AnimatedNumber value={s.value} format={s.format} />
+              </dd>
+            </motion.div>
+          ))}
+        </dl>
+      </div>
 
       <motion.div layout className="mt-8 flex flex-col gap-3">
         {folders.map((f, i) => (
