@@ -5,9 +5,17 @@ import { motion, useReducedMotion } from 'motion/react'
 export function FundingGraphic() {
   const reduced = useReducedMotion()
   return (
-    <svg
+    <motion.svg
       viewBox="0 0 80 64"
       className="mb-3 h-16 w-20 text-brand"
+      initial={false}
+      animate={reduced ? { y: 0 } : { y: [0, -2, 0] }}
+      transition={{
+        delay: 1.5,
+        duration: 6,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
       aria-hidden="true"
     >
       <circle cx="40" cy="32" r="28" fill="var(--brand-soft)" />
@@ -64,6 +72,6 @@ export function FundingGraphic() {
           transition={{ delay: reduced ? 0 : 1 }}
         />
       </motion.g>
-    </svg>
+    </motion.svg>
   )
 }
