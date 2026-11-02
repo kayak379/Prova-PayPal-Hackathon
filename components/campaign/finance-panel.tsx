@@ -41,6 +41,7 @@ export function FinancePanel({
   const [selected, setSelected] = useState<Record<string, number>>({})
   const [sponsor, setSponsor] = useState('')
   const [email, setEmail] = useState('')
+  const [emailInvoice, setEmailInvoice] = useState(false)
   const [full, setFull] = useState(true)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
@@ -147,6 +148,7 @@ export function FinancePanel({
             source,
             sponsor,
             email,
+            emailInvoice,
             items: products
               .map((p) => ({ id: p.id, qty: selected[p.id] ?? p.qty }))
               .filter((p) => p.qty > 0),
@@ -208,7 +210,7 @@ export function FinancePanel({
       ))}
       <p className="my-2 text-xs text-muted-foreground">
         {action.kind === 'invoice'
-          ? 'Merchandise only. Shipping and tax excluded. No emails will be sent.'
+          ? `Merchandise only. Shipping and tax excluded. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
           : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
       </p>
       <Pressable
@@ -300,22 +302,53 @@ export function FinancePanel({
               className={inputClass}
               placeholder="Sponsor name"
               value={sponsor}
-              onChange={(e) => setSponsor(e.target.value)}
+              onChange={(e) => {
+                setSponsor(e.target.value)
+                setPrepared(null)
+              }}
             />
             <input
-              aria-label="Sponsor email optional"
+              aria-label={
+                emailInvoice
+                  ? 'Sponsor email required'
+                  : 'Sponsor email optional'
+              }
               type="email"
+              required={emailInvoice}
               className={inputClass}
-              placeholder="Sponsor email (optional; no email sent)"
+              placeholder={
+                emailInvoice
+                  ? 'Sponsor email (required)'
+                  : 'Sponsor email (optional)'
+              }
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setPrepared(null)
+              }}
             />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={emailInvoice}
+                onChange={(e) => {
+                  setEmailInvoice(e.target.checked)
+                  setPrepared(null)
+                }}
+              />
+              Email invoice to sponsor through PayPal
+            </label>
             <p className="text-sm text-muted-foreground">
               Merchandise funding only; shipping and tax remain outside this
               request. Funding does not increase the spending limit.
             </p>
             <Pressable
-              disabled={busy || !products.length || !sponsor.trim()}
+              disabled={
+                busy ||
+                !products.length ||
+                !sponsor.trim() ||
+                (emailInvoice && !email.trim())
+              }
               onClick={() => work(() => prepare('invoice'))}
             >
               Review funding request
@@ -339,6 +372,13 @@ export function FinancePanel({
                 >
                   Open sponsor payment link
                 </a>
+              )}
+              {f.emailInvoice && (
+                <p className="my-2 text-xs text-muted-foreground">
+                  {f.emailRequestedAt
+                    ? `Email notification requested through PayPal for ${f.email}.`
+                    : `Invoice email enabled for ${f.email}. ${f.status === 'DRAFT' ? 'Publish the invoice to request delivery.' : 'Email delivery is not verified.'}`}
+                </p>
               )}
               {f.qr && (
                 <img
@@ -365,7 +405,9 @@ export function FinancePanel({
                   onClick={() => work(() => publish(f.id))}
                 >
                   {f.status === 'DRAFT'
-                    ? 'Publish and get QR'
+                    ? f.emailInvoice
+                      ? 'Publish and email invoice'
+                      : 'Publish and get QR'
                     : 'Get QR / payment link'}
                 </Pressable>
               </div>
