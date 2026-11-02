@@ -31,16 +31,7 @@ export function FinanceMoney({ active }: { active: boolean }) {
           />
         </motion.g>
       ))}
-      <motion.g
-        initial={false}
-        animate={reduced ? { y: 0 } : { y: [0, -2, 0] }}
-        transition={{
-          duration: active ? 2 : 5,
-          delay: 1,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      >
+      <g>
         <circle cx="33" cy="23" r="12" fill="var(--primary)" />
         <path
           d="M36 18.5 H31.5 A2.5 2.5 0 0 0 31.5 23.5 H34 A2.5 2.5 0 0 1 34 28.5 H29.5 M33 16 V31"
@@ -49,7 +40,23 @@ export function FinanceMoney({ active }: { active: boolean }) {
           strokeWidth="1.6"
           strokeLinecap="round"
         />
-      </motion.g>
+        {!reduced && (
+          <motion.path
+            d="M39 14 V20 M36 17 H42"
+            stroke="var(--primary-foreground)"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.9, 0] }}
+            transition={{
+              delay: 2,
+              duration: 0.9,
+              repeat: Infinity,
+              repeatDelay: active ? 3 : 6,
+            }}
+          />
+        )}
+      </g>
     </svg>
   )
 }
