@@ -2,97 +2,126 @@
 
 import { motion, useReducedMotion } from 'motion/react'
 
+const STAGES = [
+  { x: 38, label: 'Request', number: '01' },
+  { x: 132, label: 'Source', number: '02' },
+  { x: 226, label: 'Purchase', number: '03' },
+]
+
 export function DashboardGraphic() {
   const reduced = useReducedMotion()
   return (
-    <div className="relative flex min-h-44 items-center justify-center overflow-hidden rounded-2xl bg-primary px-5 py-3 text-primary-foreground">
+    <div className="relative flex min-h-44 items-center justify-center overflow-hidden rounded-2xl bg-primary px-3 py-3 text-primary-foreground">
       <svg
         viewBox="0 0 264 144"
         className="h-36 w-full max-w-72"
-        aria-hidden="true"
+        role="img"
+        aria-label="Campaign flow: describe your request, source supplies, then purchase them."
       >
-        {[42, 60].map((r) => (
-          <circle
-            key={r}
-            cx="132"
-            cy="69"
-            r={r}
-            fill="none"
-            stroke="currentColor"
-            strokeOpacity=".1"
-          />
+        {[0, 1].map((i) => (
+          <g key={i}>
+            <path
+              d={`M${66 + i * 94} 62 h37 m-5 -4 5 4 -5 4`}
+              fill="none"
+              stroke="#dce9d8"
+              strokeOpacity=".35"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {!reduced && (
+              <motion.circle
+                cy="62"
+                r="2"
+                fill="#dce9d8"
+                initial={{ cx: 66 + i * 94, opacity: 0 }}
+                animate={{
+                  cx: [66 + i * 94, 103 + i * 94],
+                  opacity: [0, 1, 1, 0],
+                }}
+                transition={{
+                  delay: 1.4 + i * 0.8,
+                  duration: 0.8,
+                  repeat: Infinity,
+                  repeatDelay: 5.2,
+                  ease: 'linear',
+                }}
+              />
+            )}
+          </g>
         ))}
-        <motion.path
-          d="M44 94 C60 94 60 44 90 44 H179 C204 44 197 99 221 99"
+        {STAGES.map((stage, i) => (
+          <g key={stage.label}>
+            <motion.circle
+              cx={stage.x}
+              cy="62"
+              r="28"
+              fill="none"
+              stroke="#dce9d8"
+              strokeWidth="1.5"
+              initial={{ opacity: reduced ? 0.2 : 0 }}
+              animate={reduced ? { opacity: 0.2 } : { opacity: [0, 0.6, 0] }}
+              transition={{
+                delay: 0.8 + i * 0.8,
+                duration: 1.2,
+                repeat: Infinity,
+                repeatDelay: 4.8,
+              }}
+            />
+            <circle
+              cx={stage.x}
+              cy="62"
+              r="23"
+              fill={i === 2 ? '#ffc439' : '#dce9d8'}
+            />
+            <text
+              x={stage.x}
+              y="18"
+              textAnchor="middle"
+              fill="#dce9d8"
+              opacity=".55"
+              fontSize="9"
+              fontFamily="inherit"
+            >
+              {stage.number}
+            </text>
+            <text
+              x={stage.x}
+              y="108"
+              textAnchor="middle"
+              fill="#dce9d8"
+              fontSize="12"
+              fontWeight="500"
+              fontFamily="inherit"
+            >
+              {stage.label}
+            </text>
+          </g>
+        ))}
+        <g
           fill="none"
-          stroke="#dce9d8"
-          strokeOpacity=".5"
-          strokeDasharray="3 6"
-          initial={reduced ? false : { pathLength: 0 }}
-          whileInView={{ pathLength: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1.5 }}
-        />
-        <motion.g
-          initial={reduced ? false : { y: 10, opacity: 0 }}
-          whileInView={{ y: 0, opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7 }}
+          stroke="var(--primary)"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          <path d="M89 66 L132 44 175 66 132 88 Z" fill="#dce9d8" />
-          <path d="M89 66 V103 L132 125 V88 Z" fill="#a9c4a9" />
-          <path d="M132 88 L175 66 V103 L132 125 Z" fill="#7c9f82" />
-          <path
-            d="M111 55 L154 77 V91"
-            fill="none"
-            stroke="var(--primary)"
-            strokeOpacity=".45"
-            strokeWidth="6"
-          />
-          <path
-            d="M99 84 L117 93 M99 91 L111 97"
-            stroke="var(--primary)"
-            strokeOpacity=".4"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </motion.g>
-        <motion.g
-          initial={false}
-          animate={reduced ? { y: 0 } : { y: [0, -3, 0] }}
-          transition={{
-            delay: 1.5,
-            duration: 5,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
+          <rect x="29" y="49" width="18" height="25" rx="3" />
+          <path d="M34 56 h8 M34 61 h8 M34 66 h5" />
+          <path d="M119 56 132 49 145 56 132 63 Z M119 56 V70 L132 77 145 70 V56 M132 63 V77 M125 52 138 59 V65" />
+          <rect x="212" y="52" width="28" height="20" rx="3" />
+          <path d="M212 58 H240 M217 66 h6" />
+        </g>
+        <text
+          x="132"
+          y="131"
+          textAnchor="middle"
+          fill="#dce9d8"
+          opacity=".5"
+          fontSize="9"
+          fontFamily="inherit"
         >
-          <circle cx="197" cy="33" r="19" fill="#ffc439" />
-          <path
-            d="M202 26 H194 A4 4 0 0 0 194 34 H199 A4 4 0 0 1 199 42 H191 M197 22 V46"
-            fill="none"
-            stroke="var(--primary)"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </motion.g>
-        <motion.g
-          initial={reduced ? false : { scale: 0.7, opacity: 0 }}
-          whileInView={{ scale: 1, opacity: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: reduced ? 0 : 0.5, duration: 0.6 }}
-        >
-          <rect x="24" y="75" width="31" height="38" rx="6" fill="#dce9d8" />
-          <path
-            d="M32 85 H47 M32 92 H47 M32 99 H41"
-            stroke="var(--primary)"
-            strokeOpacity=".5"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </motion.g>
-        <circle cx="220" cy="99" r="4" fill="#dce9d8" />
-        <circle cx="68" cy="30" r="3" fill="#dce9d8" opacity=".5" />
+          From need to supplies
+        </text>
       </svg>
     </div>
   )
