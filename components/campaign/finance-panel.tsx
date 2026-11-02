@@ -1,5 +1,6 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   ArrowRight,
   ArrowUp,
@@ -58,6 +59,24 @@ export function FinancePanel({
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const reducedMotion = useReducedMotion()
+  const conversation = useRef<HTMLDivElement>(null)
+  const followMessages = useRef(true)
+  const composer = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const list = conversation.current
+    if (list && followMessages.current) list.scrollTo({ top: list.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' })
+  }, [campaign.financeMessages, campaign.refunds, asking, reducedMotion])
+  function sendMessage() {
+    if (!question.trim() || workLock.current) return
+    followMessages.current = true
+    void work(async () => {
+      setAsking(true)
+      try { await ask() }
+      finally { setAsking(false); requestAnimationFrame(() => composer.current?.focus()) }
+    }, 'Checking campaign records…')
+  }
   const [orderId, setOrderId] = useState(
     refundOrderId || campaign.orders[0]?.id || '',
   )
@@ -282,7 +301,7 @@ export function FinancePanel({
           {error}
         </p>
       )}
-      {busy && (
+      {busy && !asking && (
         <p role="status" className="text-sm animate-pulse">
           {activity}
         </p>
@@ -680,61 +699,88 @@ export function FinancePanel({
               </div>
             )}
           </Card>
-          <Card className="flex min-w-0 flex-col gap-4 p-5 sm:p-7">
-            <div className="flex items-center gap-3">
-              <FinanceMoney active={busy} />
+          <Card className="flex min-w-0 flex-col overflow-hidden">
+            <div className="flex items-center gap-3 px-5 pt-5 sm:px-6">
+              <FinanceMoney active={asking} />
               <h2 className="font-serif text-3xl tracking-tight">
                 Finance assistant
               </h2>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="border-b border-border px-5 pb-5 pt-3 text-xs leading-relaxed text-muted-foreground sm:px-6">
               Checks PayPal records and prepares actions. Financial changes
               require your confirmation.
             </p>
-            {campaign.orders.length > 0 && <Pressable variant="secondary" size="sm" disabled={busy} onClick={() => {
-              const purchase = [...campaign.orders].sort((a, b) => b.createdAt - a.createdAt)[0]
-              const amountCents = Math.min(500, purchase.totalCents ?? Math.round(purchase.total * 100))
-              setQuestion(`Check purchase ${purchase.id} and prepare a ${dollars(amountCents)} refund for my review. Do not execute it yet.`)
-              document.getElementById('finance-question')?.focus()
-            }}>Prepare a refund with the assistant</Pressable>}
+            <div ref={conversation} role="log" aria-label="Conversation with finance assistant" aria-live="polite" aria-relevant="additions" onScroll={() => {
+              const list = conversation.current
+              if (list) followMessages.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80
+            }} className="flex h-[380px] min-h-0 flex-col gap-5 overflow-y-auto overscroll-contain px-4 py-5 sm:h-[440px] sm:px-6">
+            {!campaign.financeMessages?.length && <div className="my-auto px-3 py-8 text-center">
+              <ReceiptText className="mx-auto mb-4 size-7 text-brand" />
+              <p className="font-serif text-2xl">Let’s check the numbers</p>
+              <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">Ask whether a sponsor paid, check a purchase, or request a refund for review.</p>
+            </div>}
             {(campaign.financeMessages || []).map((m) => (
-              <div
+              <motion.div
                 key={m.id}
-                className="rounded-xl border border-border bg-muted/30 p-4"
+                initial={{ opacity: 0, y: reducedMotion ? 0 : 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: reducedMotion ? 0 : 0.25, ease: 'easeOut' }}
+                className={m.role === 'user' ? 'ml-auto w-fit max-w-[90%]' : 'mr-auto min-w-0 max-w-[95%]'}
               >
-                <p className="mb-1 text-xs font-medium">
-                  {m.role === 'user' ? 'You' : 'Assistant'}
+                <p className={'mb-1.5 px-1 text-[11px] font-medium text-muted-foreground ' + (m.role === 'user' ? 'text-right' : '')}>
+                  {m.role === 'user' ? 'You' : 'Prova'}
                 </p>
-                <p className="whitespace-pre-wrap text-sm">{m.text}</p>
-                {m.trace?.map((t, i) => (
-                  <p className="mt-1 text-xs text-muted-foreground" key={i}>
+                <div className={m.role === 'user' ? 'rounded-2xl rounded-tr-sm bg-brand px-4 py-3 text-white' : 'rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3'}><ChatMessage text={m.text} /></div>
+                {!!m.trace?.length && <details className="mt-2 px-1 text-xs text-muted-foreground"><summary className="cursor-pointer py-1">PayPal checks · {m.trace.length}</summary>{m.trace.map((t, i) => (
+                  <p className="mt-2 break-words border-l border-border pl-3" key={i}>
                     {t.tool} → {t.summary}
                   </p>
-                ))}
+                ))}</details>}
                 {m.actions?.map(actionCard)}
-              </div>
+              </motion.div>
             ))}
-            <Label htmlFor="finance-question">Ask about this campaign</Label>
+            <AnimatePresence initial={false}>
+              {asking && <motion.div key="typing" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mr-auto">
+                <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">Prova</p>
+                <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3">
+                  <span aria-hidden="true" className="flex gap-1">{[0, 1, 2].map(i => <motion.span key={i} className="size-1.5 rounded-full bg-brand/70" animate={reducedMotion ? {} : { opacity: [0.35, 1, 0.35], y: [0, -3, 0] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }} />)}</span>
+                  <span className="text-xs text-muted-foreground">Checking campaign records…</span>
+                </div>
+              </motion.div>}
+            </AnimatePresence>
+            </div>
+            <form className="border-t border-border bg-card px-4 pb-4 pt-3 sm:px-6" onSubmit={e => { e.preventDefault(); sendMessage() }}>
+            <label htmlFor="finance-question" className="sr-only">Message finance assistant</label>
+            <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-2 transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
             <textarea
+              ref={composer}
               id="finance-question"
               aria-label="Finance question"
-              className={inputClass + ' h-24 py-3'}
+              rows={2}
+              className="min-h-12 max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
               value={question}
               disabled={busy}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Did our last payment complete? Prepare a $10 refund for the latest purchase."
+              placeholder="Ask about this campaign…"
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); sendMessage() } }}
             />
             <Pressable
               disabled={busy || !question.trim()}
-              onClick={() => work(ask, 'The assistant is checking campaign records and preparing your response…')}
-              className="self-end"
+              type="submit" size="icon" variant="brand" aria-label="Send message"
             >
-              Ask assistant <ArrowUp />
+              <ArrowUp />
             </Pressable>
+            </div>
+            <p className="mt-2 px-1 text-[11px] text-muted-foreground">Enter to send · Shift + Enter for a new line</p>
+            </form>
           </Card>
         </div>
       )}
       {prepared && actionCard(prepared)}
     </div>
   )
+}
+
+function ChatMessage({ text }: { text: string }) {
+  return <div className="space-y-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{text.split('\n').map((line, i) => <p key={i} className={line ? '' : 'h-2'}>{line.replace(/^\s*[-*]\s+/, '• ').split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, j) => part.startsWith('**') && part.endsWith('**') ? <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong> : part.startsWith('`') && part.endsWith('`') ? <code key={j} className="rounded bg-foreground/5 px-1 font-mono text-xs">{part.slice(1, -1)}</code> : part)}</p>)}</div>
 }
