@@ -127,7 +127,7 @@ export function DashboardGraphic() {
         >
           From need to supplies
         </text>
-      </motion.svg>
-    </div>
+      </svg>
+    </motion.div>
   )
 }
