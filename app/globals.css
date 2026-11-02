@@ -100,12 +100,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    min-height: 100dvh;
-    background-image:
-      radial-gradient(ellipse at 18% 0%, rgba(255, 255, 255, 0.8), transparent 58%),
-      radial-gradient(ellipse at 100% 85%, rgba(208, 222, 204, 0.28), transparent 65%),
-      linear-gradient(135deg, #faf7ef 0%, #f6f2e7 55%, #efeee3 100%);
-    background-attachment: fixed;
   }
 }
 
