@@ -9,6 +9,7 @@ import { Modal } from '../modal'
 import { CampaignSettings } from './campaign-settings'
 import { spring } from '../motion-provider'
 import { BudgetRing } from './budget-ring'
+import { PurchasesGraphic } from './purchases-graphic'
 import { OrdersList } from './orders-list'
 import { FinancePanel } from './finance-panel'
 import { AuditLog } from './audit-log'
@@ -76,10 +77,10 @@ export function CampaignDetail({ id }: { id: string }) {
           </PressableLink>
         </div>
       </div>
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Manage supplies, bring sponsors on board, and keep every payment in
-          view.
-        </p>
+      <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+        Manage supplies, bring sponsors on board, and keep every payment in
+        view.
+      </p>
 
       <section
         aria-label="Campaign overview"
@@ -162,15 +163,18 @@ export function CampaignDetail({ id }: { id: string }) {
         >
           {(tab === 'Orders' || tab === 'Audit log') && (
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="font-serif text-3xl tracking-tight">
-                  {tab === 'Orders' ? 'Your purchases' : 'Campaign activity'}
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {tab === 'Orders'
-                    ? 'Review supply bundles, payment receipts, and refunds.'
-                    : 'A history of decisions and financial updates.'}
-                </p>
+              <div className="flex items-center gap-3">
+                {tab === 'Orders' && <PurchasesGraphic />}
+                <div>
+                  <h2 className="font-serif text-3xl tracking-tight">
+                    {tab === 'Orders' ? 'Your purchases' : 'Campaign activity'}
+                  </h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {tab === 'Orders'
+                      ? 'Review supply bundles, payment receipts, and refunds.'
+                      : 'A history of decisions and financial updates.'}
+                  </p>
+                </div>
               </div>
               <span className="text-xs text-muted-foreground">
                 PayPal sandbox · Simulated fulfillment
