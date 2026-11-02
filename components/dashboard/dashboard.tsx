@@ -30,7 +30,7 @@ export function Dashboard() {
   ]
 
   return (
-    <main className="mx-auto max-w-6xl px-5 pb-24 pt-10">
+    <main className="dashboard-surface mx-auto max-w-6xl px-5 pb-24 pt-10">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="font-serif text-5xl tracking-tight">Campaigns</h1>
         <div className="flex items-center gap-2">
