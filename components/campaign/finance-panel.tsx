@@ -20,6 +20,7 @@ import { priceCents } from '@/lib/money'
 import { usdPrecise } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import { Card, Pressable, inputClass, Label } from '../kit'
+import { FundingGraphic } from './funding-graphic'
 const dollars = (c: number) => usdPrecise(c / 100)
 const upsert = <T extends { id: string }>(list: T[], item: T) => [
   ...list.filter((i) => i.id !== item.id),
@@ -275,9 +276,7 @@ export function FinancePanel({
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <Card className="flex min-w-0 flex-col gap-5 p-5 sm:p-7">
             <div>
-              <span className="mb-3 inline-flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand">
-                <ReceiptText className="size-5" />
-              </span>
+              <FundingGraphic />
               <h2 className="font-serif text-3xl tracking-tight">
                 Sponsor a supply bundle
               </h2>
