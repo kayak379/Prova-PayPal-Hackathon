@@ -1,0 +1,144 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-paypal-navy: #003087;
+  --color-paypal-blue: #0070e0;
+  --color-paypal-gold: #ffc439;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: light;
+  --background: #f6f2e7;
+  --foreground: #203e32;
+  --card: #fffcf4;
+  --card-foreground: #203e32;
+  --popover: #fffcf4;
+  --popover-foreground: #203e32;
+  --primary: #214e3a;
+  --primary-foreground: #fffcf4;
+  --secondary: #eaece0;
+  --secondary-foreground: #214e3a;
+  --muted: #eaece0;
+  --muted-foreground: #626f60;
+  --accent: #e3e9da;
+  --accent-foreground: #214e3a;
+  --brand: #2b6148;
+  --brand-soft: #e2ead9;
+  --success: #357451;
+  --success-soft: #e3eddc;
+  --destructive: oklch(0.577 0.2 27);
+  --border: #d8ddcc;
+  --input: #c8d1be;
+  --ring: #2b6148;
+  --chart-1: #2b6148;
+  --chart-2: #6d9066;
+  --chart-3: #9cad87;
+  --chart-4: #c4c6a1;
+  --chart-5: #203e32;
+  --radius: 0.875rem;
+  --sidebar: #eeefdf;
+  --sidebar-foreground: #203e32;
+  --sidebar-primary: #214e3a;
+  --sidebar-primary-foreground: #fffcf4;
+  --sidebar-accent: #e2ead9;
+  --sidebar-accent-foreground: #214e3a;
+  --sidebar-border: #d8ddcc;
+  --sidebar-ring: #2b6148;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .shimmer-text {
+    background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.6s linear infinite;
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text { animation: none; color: var(--foreground); }
+}
+
+@keyframes ring {
+  from { transform: scale(0.6); opacity: 0.55; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@layer utilities {
+  .animate-ring { animation: ring 3s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .animate-float { animation: float-y 4s ease-in-out infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ring, .animate-float { animation: none; }
+}
