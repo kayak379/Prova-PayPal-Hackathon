@@ -26,6 +26,19 @@ function load(file, mocks) {
 }
 const sign = (x) => JSON.stringify(x)
 const common = { sign, verify: JSON.parse, env: () => 'test' }
+test('invoice QR extracts multipart image data and repairs previously saved responses', () => {
+  const { invoiceQr } = load('lib/server/invoice-qr.ts', {})
+  const png =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
+  const multipart = `--boundary\r\nContent-Disposition: form-data; name="image"\r\nContent-Type: text/plain\r\n\r\n${png}\r\n--boundary--\r\n`
+  const expected = `data:image/png;base64,${png}`
+  assert.equal(invoiceQr(multipart), expected)
+  assert.equal(invoiceQr(`data:image/png;base64,${multipart}`), expected)
+  assert.equal(invoiceQr({ image: png }), expected)
+  assert.equal(invoiceQr(expected), expected)
+  assert.throws(() => invoiceQr('<html>Error</html>'), /invalid QR/)
+  assert.throws(() => invoiceQr({}), /no QR/)
+})
 const item = {
   id: 'water',
   name: 'Water',
