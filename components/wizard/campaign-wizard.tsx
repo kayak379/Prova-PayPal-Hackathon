@@ -31,7 +31,14 @@ const slide = {
 }
 
 export function CampaignWizard({ existingId }: { existingId?: string }) {
-  const { settings, folders, campaigns, addCampaign, saveProposal } = useStore()
+  const {
+    settings,
+    folders,
+    campaigns,
+    addCampaign,
+    updateCampaign,
+    saveProposal,
+  } = useStore()
   const [createdId, setCreatedId] = useState(existingId)
   const existing = campaigns.find((c) => c.id === createdId)
 
@@ -44,30 +51,61 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
           taxId: existing.taxId,
           address: existing.address,
         }
-      : { name: '', folderId: folders[0]?.id ?? '', budget: 10000, taxId: settings.taxId, address: settings.address },
+      : {
+          name: '',
+          folderId: folders[0]?.id ?? '',
+          budget: 10000,
+          taxId: settings.taxId,
+          address: settings.address,
+        },
   )
-  const [[step, dir], setStep] = useState<[number, number]>([existing ? (typeof window !== 'undefined' && localStorage.getItem('prova-payment-' + existing.id) ? 3 : existing.proposal ? 2 : 1) : 0, 1])
+  const [[step, dir], setStep] = useState<[number, number]>([
+    existing
+      ? typeof window !== 'undefined' &&
+        localStorage.getItem('prova-payment-' + existing.id)
+        ? 3
+        : existing.proposal
+          ? 2
+          : 1
+      : 0,
+    1,
+  ])
   const [prompt, setPrompt] = useState(existing?.request || '')
   const [csv, setCsv] = useState<{ name: string; rows: number } | null>(null)
   const [plan, setPlan] = useState<Plan | null>(existing?.proposal || null)
   const [agentProgress, setAgentProgress] = useState(-1)
   const [paying, setPaying] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
 
-  useEffect(() => { if (createdId) saveProposal(createdId, prompt, plan) }, [createdId, prompt, plan, saveProposal])
+  useEffect(() => {
+    if (createdId) saveProposal(createdId, prompt, plan)
+  }, [createdId, prompt, plan, saveProposal])
 
   const go = (next: number) => setStep([next, next > step ? 1 : -1])
-  const minStep = existing ? 1 : 0
+  const minStep = 0
   const exitHref = existing ? `/campaigns/${existing.id}` : '/dashboard'
 
-  if (createdId && !existing) return <main className="p-10"><h1 className="font-serif text-3xl">Campaign not found in this browser</h1><Link href="/dashboard">Return to campaigns</Link></main>
+  if (createdId && !existing)
+    return (
+      <main className="p-10">
+        <h1 className="font-serif text-3xl">
+          Campaign not found in this browser
+        </h1>
+        <Link href="/dashboard">Return to campaigns</Link>
+      </main>
+    )
 
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
           <Logo href="/dashboard" />
-          <Stepper step={step} minStep={minStep} onSelect={paying ? undefined : go} />
+          <Stepper
+            step={step}
+            minStep={minStep}
+            onSelect={paying || discovering || paymentComplete ? undefined : go}
+          />
           <Link
             href={exitHref}
             aria-label="Exit"
@@ -80,7 +118,14 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-5 py-6 lg:grid-cols-[340px_1fr] lg:gap-10 lg:py-10">
         <aside className="lg:sticky lg:top-26 lg:h-[calc(100dvh-8.5rem)]">
-          <StepGraphic step={step} agentProgress={agentProgress} draft={draft} plan={plan} paying={paying} paymentComplete={paymentComplete} />
+          <StepGraphic
+            step={step}
+            agentProgress={agentProgress}
+            draft={draft}
+            plan={plan}
+            paying={paying}
+            paymentComplete={paymentComplete}
+          />
         </aside>
 
         <section className="relative min-w-0">
@@ -94,7 +139,29 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
               exit="exit"
               transition={softSpring}
             >
-              {step === 0 && <StepCampaign draft={draft} setDraft={setDraft} onNext={() => { const campaign = addCampaign(draft); window.history.replaceState(null, '', `/campaigns/new?campaign=${campaign.id}`); setCreatedId(campaign.id); go(1) }} />}
+              {step === 0 && (
+                <StepCampaign
+                  draft={draft}
+                  setDraft={setDraft}
+                  onNext={() => {
+                    if (existing) {
+                      updateCampaign(existing.id, {
+                        ...draft,
+                        budget: draft.budget + campaignSpent(existing),
+                      })
+                    } else {
+                      const campaign = addCampaign(draft)
+                      window.history.replaceState(
+                        null,
+                        '',
+                        `/campaigns/new?campaign=${campaign.id}`,
+                      )
+                      setCreatedId(campaign.id)
+                    }
+                    go(1)
+                  }}
+                />
+              )}
               {step === 1 && (
                 <StepRequest
                   prompt={prompt}
@@ -104,6 +171,8 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
                   budget={draft.budget}
                   campaignName={draft.name}
                   onProgress={setAgentProgress}
+                  onBack={() => go(0)}
+                  onBusyChange={setDiscovering}
                   onPlan={(p) => {
                     setPlan(p)
                     go(2)

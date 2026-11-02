@@ -1,8 +1,14 @@
 'use client'
 
 import { AnimatePresence, motion } from 'motion/react'
-import { FileSpreadsheet, Paperclip, Sparkles, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import {
+  ArrowLeft,
+  FileSpreadsheet,
+  Paperclip,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable } from '../kit'
 import { AgentActivity } from './agent-activity'
 import { usd } from '@/lib/format'
@@ -23,6 +29,8 @@ export function StepRequest({
   campaignName,
   onPlan,
   onProgress,
+  onBack,
+  onBusyChange,
 }: {
   prompt: string
   setPrompt: (s: string) => void
@@ -32,16 +40,24 @@ export function StepRequest({
   campaignName: string
   onPlan: (p: Plan) => void
   onProgress: (n: number) => void
+  onBack: () => void
+  onBusyChange: (busy: boolean) => void
 }) {
   const [error, setError] = useState('')
   const [thinking, setThinking] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    onBusyChange(thinking)
+    return () => onBusyChange(false)
+  }, [thinking, onBusyChange])
 
   const onFile = async (file: File) => {
     const text = await file.text()
     const rows = Math.max(0, text.trim().split(/\r?\n/).length - 1)
     setCsv({ name: file.name, rows })
-    setPrompt(`${prompt}\nSupplies list (${file.name}):\n${text.slice(0, 8000)}`)
+    setPrompt(
+      `${prompt}\nSupplies list (${file.name}):\n${text.slice(0, 8000)}`,
+    )
   }
 
   const canBuild = prompt.trim().length > 8 || !!csv
@@ -52,7 +68,11 @@ export function StepRequest({
         prompt={prompt || `Supplies list from ${csv?.name}`}
         budget={budget}
         onProgress={onProgress}
-        onError={(message) => { setError(message); setThinking(false); onProgress(-1) }}
+        onError={(message) => {
+          setError(message)
+          setThinking(false)
+          onProgress(-1)
+        }}
         onDone={(p) => {
           onProgress(-1)
           onPlan(p)
@@ -63,10 +83,26 @@ export function StepRequest({
 
   return (
     <div className="flex flex-col gap-6">
-      {error && <p role="alert" className="text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-destructive">
+          {error}
+        </p>
+      )}
+      <Pressable
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        onClick={onBack}
+      >
+        <ArrowLeft /> Back to campaign
+      </Pressable>
       <div>
-        <h1 className="text-balance font-serif text-4xl tracking-tight sm:text-5xl">What happened?</h1>
-        {campaignName && <p className="mt-2 text-muted-foreground">{campaignName}</p>}
+        <h1 className="text-balance font-serif text-4xl tracking-tight sm:text-5xl">
+          What happened?
+        </h1>
+        {campaignName && (
+          <p className="mt-2 text-muted-foreground">{campaignName}</p>
+        )}
       </div>
 
       <motion.div
@@ -97,7 +133,9 @@ export function StepRequest({
               <div className="mt-2 inline-flex items-center gap-2.5 rounded-xl bg-muted py-2 pl-3 pr-1.5 text-sm">
                 <FileSpreadsheet className="size-4 text-success" />
                 <span className="font-medium">{csv.name}</span>
-                <span className="text-muted-foreground tabular">{csv.rows} rows</span>
+                <span className="text-muted-foreground tabular">
+                  {csv.rows} rows
+                </span>
                 <button
                   onClick={() => setCsv(null)}
                   aria-label="Remove file"
@@ -124,12 +162,25 @@ export function StepRequest({
                 e.target.value = ''
               }}
             />
-            <Pressable variant="ghost" size="sm" onClick={() => fileRef.current?.click()}>
+            <Pressable
+              variant="ghost"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+            >
               <Paperclip /> CSV
             </Pressable>
-            <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground tabular">{usd(budget)} budget</span>
+            <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground tabular">
+              {usd(budget)} budget
+            </span>
           </div>
-          <Pressable variant="brand" disabled={!canBuild} onClick={() => { setError(''); setThinking(true) }}>
+          <Pressable
+            variant="brand"
+            disabled={!canBuild}
+            onClick={() => {
+              setError('')
+              setThinking(true)
+            }}
+          >
             <Sparkles /> Build proposal
           </Pressable>
         </div>
@@ -141,7 +192,11 @@ export function StepRequest({
             key={ex}
             type="button"
             initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 0.15 + i * 0.05 } }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: { delay: 0.15 + i * 0.05 },
+            }}
             whileTap={{ scale: 0.99 }}
             onClick={() => setPrompt(ex)}
             className="rounded-2xl border border-transparent px-4 py-3 text-left text-sm text-muted-foreground outline-none transition-colors hover:border-border hover:bg-card hover:text-foreground focus-visible:border-border focus-visible:bg-card"
