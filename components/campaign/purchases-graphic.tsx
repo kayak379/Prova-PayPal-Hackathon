@@ -5,9 +5,17 @@ import { motion, useReducedMotion } from 'motion/react'
 export function PurchasesGraphic() {
   const reduced = useReducedMotion()
   return (
-    <svg
+    <motion.svg
       viewBox="0 0 88 64"
       className="h-16 w-[88px] shrink-0 text-brand"
+      initial={false}
+      animate={reduced ? { y: 0 } : { y: [0, -2, 0] }}
+      transition={{
+        delay: 1.5,
+        duration: 5,
+        repeat: Infinity,
+        ease: 'easeInOut',
+      }}
       aria-hidden="true"
     >
       <ellipse
@@ -65,6 +73,6 @@ export function PurchasesGraphic() {
         viewport={{ once: true }}
         transition={{ duration: reduced ? 0 : 2 }}
       />
-    </svg>
+    </motion.svg>
   )
 }
