@@ -11,10 +11,10 @@ const STAGES = [
 export function DashboardGraphic() {
   const reduced = useReducedMotion()
   return (
-    <div className="relative flex min-h-44 items-center justify-center overflow-hidden rounded-2xl bg-primary px-3 py-3 text-primary-foreground">
+    <div className="relative flex min-h-60 items-center justify-center overflow-hidden rounded-2xl bg-primary px-5 py-4 text-primary-foreground">
       <svg
         viewBox="0 0 264 144"
-        className="h-36 w-full max-w-72"
+        className="h-56 w-full max-w-xl"
         role="img"
         aria-label="Campaign flow: describe your request, source supplies, then purchase them."
       >
@@ -32,7 +32,7 @@ export function DashboardGraphic() {
             {!reduced && (
               <motion.circle
                 cy="62"
-                r="2"
+                r="3.5"
                 fill="#dce9d8"
                 initial={{ cx: 66 + i * 94, opacity: 0 }}
                 animate={{
@@ -40,11 +40,11 @@ export function DashboardGraphic() {
                   opacity: [0, 1, 1, 0],
                 }}
                 transition={{
-                  delay: 1.4 + i * 0.8,
-                  duration: 0.8,
+                  delay: 1.2 + i * 1.4,
+                  duration: 1.4,
                   repeat: Infinity,
-                  repeatDelay: 5.2,
-                  ease: 'linear',
+                  repeatDelay: 5.8,
+                  ease: 'easeInOut',
                 }}
               />
             )}
@@ -60,12 +60,12 @@ export function DashboardGraphic() {
               stroke="#dce9d8"
               strokeWidth="1.5"
               initial={{ opacity: reduced ? 0.2 : 0 }}
-              animate={reduced ? { opacity: 0.2 } : { opacity: [0, 0.6, 0] }}
+              animate={reduced ? { opacity: 0.2 } : { opacity: [0, 1, 0] }}
               transition={{
-                delay: 0.8 + i * 0.8,
-                duration: 1.2,
+                delay: 0.6 + i * 1.4,
+                duration: 1.8,
                 repeat: Infinity,
-                repeatDelay: 4.8,
+                repeatDelay: 5.4,
               }}
             />
             <circle
