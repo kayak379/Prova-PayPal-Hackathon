@@ -132,7 +132,13 @@ export async function prepareFinance(
     const email = String(input.email || '').trim()
     if (!sponsor || (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)))
       throw new Error('Enter a sponsor name and a valid optional email.')
+    const emailInvoice = input.emailInvoice === true
+    if (emailInvoice && !email)
+      throw new Error(
+        'A sponsor email address is required to email the invoice.',
+      )
     payload = {
+      emailInvoice,
       kind: 'invoice',
       items,
       sponsor,
@@ -163,6 +169,8 @@ export async function prepareFinance(
         ? `Funding request for ${payload.sponsor}`
         : 'Refund sandbox purchase',
     items: payload.items,
+    emailInvoice: payload.emailInvoice,
+    email: payload.email,
   }
 }
 export async function confirmFinance(c: Campaign, token: string) {
@@ -181,6 +189,7 @@ export async function confirmFinance(c: Campaign, token: string) {
       source: action.source,
       sponsor: action.sponsor,
       email: action.email,
+      emailInvoice: action.emailInvoice === true,
       items: action.items.map((p: PlanItem) => ({ id: p.id, qty: p.qty })),
     })
     const result = await paypal(
@@ -216,6 +225,7 @@ export async function confirmFinance(c: Campaign, token: string) {
       operationId: action.operationId,
       sponsor: action.sponsor,
       email: action.email,
+      emailInvoice: action.emailInvoice === true,
       items: action.items,
       amountCents: action.amountCents,
       receivedCents: 0,
@@ -224,6 +234,8 @@ export async function confirmFinance(c: Campaign, token: string) {
       createdAt: Date.now(),
       proof: sign({
         kind: 'invoice',
+        emailInvoice: action.emailInvoice === true,
+        email: action.email,
         campaignId: c.id,
         id,
         amountCents: action.amountCents,
@@ -293,12 +305,26 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
   if (!local) throw new Error('Invoice outside campaign.')
   const ref = reference(local.proof, c.id, 'invoice')
   let data = await paypal('get_invoice', { invoice_id: ref.id })
+  let emailRequestedAt = local.emailRequestedAt
   if (publish && data.status === 'DRAFT') {
+    if (
+      ref.emailInvoice &&
+      (!ref.email ||
+        data.primary_recipients?.[0]?.billing_info?.email_address !== ref.email)
+    )
+      throw new Error(
+        'Sponsor email differs from the confirmed recipient. Create a new funding request.',
+      )
     await paypal(
       'send_invoice',
-      { invoice_id: ref.id, send_to_recipient: false, send_to_invoicer: false },
+      {
+        invoice_id: ref.id,
+        send_to_recipient: ref.emailInvoice === true,
+        send_to_invoicer: false,
+      },
       `publish-${local.operationId}`,
     )
+    if (ref.emailInvoice) emailRequestedAt = Date.now()
     data = await paypal('get_invoice', { invoice_id: ref.id })
   }
   const paid = cents(data.payments?.paid_amount?.value)
@@ -327,6 +353,8 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
   }
   const funding: FundingRequest = {
     ...local,
+    emailInvoice: ref.emailInvoice === true,
+    emailRequestedAt,
     status: data.status,
     amountCents: cents(data.amount?.value) || local.amountCents,
     receivedCents: paid,

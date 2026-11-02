@@ -79,6 +79,8 @@ export type Campaign = {
 }
 
 export type FundingRequest = {
+  emailInvoice?: boolean
+  emailRequestedAt?: number
   id: string
   operationId: string
   sponsor: string
@@ -105,6 +107,8 @@ export type PurchaseRefund = {
   proof: string
 }
 export type FinanceAction = {
+  emailInvoice?: boolean
+  email?: string
   token: string
   operationId: string
   campaignId: string

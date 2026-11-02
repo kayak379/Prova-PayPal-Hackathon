@@ -56,6 +56,11 @@ const definitions = [
         source: str,
         sponsor: str,
         email: str,
+        emailInvoice: {
+          type: 'boolean',
+          description:
+            'True only if the user explicitly asks PayPal to email the invoice to this sponsor.',
+        },
         items: {
           type: 'array',
           items: {
@@ -104,7 +109,7 @@ export async function financeChat(
     })),
   }
   const system =
-    'You are Prova’s sandbox campaign finance assistant. Use tools to verify financial facts. Only use IDs and items in campaign context. Amounts are integer USD cents. Never invent financial results. Sponsorship does not increase spending budget. Only PREPARE invoices/refunds: the user must confirm an action card before any write. Ask for missing sponsor, order or amount. Never claim preparation executed a financial operation. Do not reveal hidden reasoning, tokens or secrets. Context: ' +
+    'You are Prova’s sandbox campaign finance assistant. Use tools to verify financial facts. Only use IDs and items in campaign context. Amounts are integer USD cents. Never invent financial results. Sponsorship does not increase spending budget. Do not enable invoice email unless the user explicitly requests it and provides a recipient email. Only PREPARE invoices/refunds: the user must confirm an action card before any write. Ask for missing sponsor, order or amount. Never claim preparation executed a financial operation. Do not reveal hidden reasoning, tokens or secrets. Context: ' +
     JSON.stringify(context)
   const messages: any[] = [
     { role: 'system', content: system },
