@@ -20,8 +20,12 @@ export function Dashboard() {
   const orders = campaigns.reduce((s, c) => s + c.orders.length, 0)
 
   const stats = [
-    { label: 'Budget', value: totalBudget, format: fmt },
-    { label: 'Deployed', value: totalSpent, format: fmt },
+    { label: 'Total Spent', value: totalSpent, format: fmt },
+    {
+      label: 'Remaining budget',
+      value: Math.max(0, totalBudget - totalSpent),
+      format: fmt,
+    },
     { label: 'Orders', value: orders, format: count },
   ]
 
@@ -37,18 +41,18 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="mt-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
         <DashboardGraphic />
-        <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-border bg-border">
+        <dl className="grid grid-cols-3 gap-3 md:grid-cols-1">
           {stats.map((s, i) => (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }}
-              className="flex min-w-0 flex-col justify-center bg-card px-3 py-5 sm:px-5"
+              className="flex min-w-0 flex-col justify-center rounded-2xl border border-border bg-card px-3 py-3 sm:px-5"
             >
               <dt className="text-xs text-muted-foreground">{s.label}</dt>
-              <dd className="mt-2 break-words text-xl font-medium tracking-tight sm:text-2xl">
+              <dd className="mt-1 break-words text-xl font-medium tracking-tight sm:text-2xl">
                 <AnimatedNumber value={s.value} format={s.format} />
               </dd>
             </motion.div>
