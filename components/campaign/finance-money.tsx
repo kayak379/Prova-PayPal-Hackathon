@@ -32,12 +32,12 @@ export function FinanceMoney({ active }: { active: boolean }) {
         </motion.g>
       ))}
       <motion.g
-        key={String(active)}
         initial={false}
-        animate={reduced ? {} : { y: [0, -3, 0] }}
+        animate={reduced ? { y: 0 } : { y: [0, -2, 0] }}
         transition={{
-          duration: active ? 1.5 : 3,
-          repeat: active ? Infinity : 1,
+          duration: active ? 2 : 5,
+          delay: 1,
+          repeat: Infinity,
           ease: 'easeInOut',
         }}
       >
