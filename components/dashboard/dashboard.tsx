@@ -41,7 +41,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="mt-8 grid gap-4 md:grid-cols-[minmax(0,1fr)_260px] lg:grid-cols-[minmax(0,1fr)_300px]">
         <DashboardGraphic />
         <dl className="grid grid-cols-3 gap-3 md:grid-cols-1">
           {stats.map((s, i) => (
