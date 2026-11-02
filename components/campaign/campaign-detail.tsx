@@ -9,7 +9,6 @@ import { Modal } from '../modal'
 import { CampaignSettings } from './campaign-settings'
 import { spring } from '../motion-provider'
 import { BudgetRing } from './budget-ring'
-import { CampaignSignal } from './campaign-signal'
 import { OrdersList } from './orders-list'
 import { FinancePanel } from './finance-panel'
 import { AuditLog } from './audit-log'
@@ -77,14 +76,11 @@ export function CampaignDetail({ id }: { id: string }) {
           </PressableLink>
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-4">
-        <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
           Manage supplies, bring sponsors on board, and keep every payment in
           view.
         </p>
 
-        <CampaignSignal />
-      </div>
       <section
         aria-label="Campaign overview"
         className="mt-8 overflow-hidden rounded-2xl border border-border bg-card"
