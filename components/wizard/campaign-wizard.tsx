@@ -192,6 +192,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
               )}
               {step === 2 && plan && (
                 <StepReview
+                  onBusyChange={setDiscovering}
                   plan={plan}
                   setPlan={setPlan}
                   prompt={discoveryRequest(prompt, csv)}

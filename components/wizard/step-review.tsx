@@ -2,12 +2,12 @@
 
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, ArrowUp, Minus, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { AnimatedNumber, Card, Pressable } from '../kit'
 import { softSpring } from '../motion-provider'
 import { estimatedPlan as recalcPlan } from '@/lib/money'
 import { requestPlan } from '@/lib/discovery-client'
-import { planTotals, usd, usdPrecise } from '@/lib/format'
+import { planTotals, usdPrecise } from '@/lib/format'
 import type { Plan } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +18,7 @@ export function StepReview({
   budget,
   onBack,
   onNext,
+  onBusyChange,
 }: {
   plan: Plan
   setPlan: (p: Plan) => void
@@ -25,30 +26,43 @@ export function StepReview({
   budget: number
   onBack: () => void
   onNext: () => void
+  onBusyChange: (busy: boolean) => void
 }) {
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [revising, setRevising] = useState(false)
+  const revisionLock = useRef(false)
+  const [revision, setRevision] = useState<{ before: Plan; after: Plan; request: string } | null>(null)
+  const [revisionProgress, setRevisionProgress] = useState('')
   const { subtotal, total } = planTotals(plan)
   const over = total > budget
-  const fmt = useCallback((n: number) => usd(n), [])
+  const fmt = useCallback((n: number) => usdPrecise(n), [])
 
   const setQty = (id: string, qty: number) =>
     setPlan(recalcPlan({ ...plan, items: plan.items.map((i) => (i.id === id ? { ...i, qty: Math.max(1, qty) } : i)) }))
   const remove = (id: string) => setPlan(recalcPlan({ ...plan, items: plan.items.filter((i) => i.id !== id) }))
 
   const revise = async () => {
-    if (!feedback.trim() || revising) return
-    setRevising(true); setError('')
-    try { setPlan(await requestPlan({ prompt, budget, feedback, currentPlan: plan })); setFeedback('') }
+    if (!feedback.trim() || revisionLock.current) return
+    revisionLock.current = true
+    onBusyChange(true)
+    setRevising(true); setError(''); setRevision(null); setRevisionProgress('Reviewing your requested changes…')
+    try {
+      const next = await requestPlan({ prompt, budget, feedback, currentPlan: plan }, (_, detail) => setRevisionProgress(detail))
+      setPlan(next)
+      setRevision({ before: plan, after: next, request: feedback.trim() })
+      // Preserve the request for retry when the provider retains the original plan.
+      if (!next.fallbackReason) setFeedback('')
+    }
     catch (e) { setError(e instanceof Error ? e.message : 'Revision failed') }
-    finally { setRevising(false) }
+    finally { revisionLock.current = false; setRevising(false); onBusyChange(false) }
   }
 
   return (
     <div className="flex flex-col gap-6">
       {plan.mock && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Mock data — AI fallback</p><p className="mt-1">{plan.fallbackReason || 'These are sample products and prices, not live supplier offers.'}</p></div>}
       {error && <p role="alert" className="text-destructive">{error}</p>}
+      {revision && revision.after === plan && <RevisionSummary before={revision.before} after={revision.after} request={revision.request} budget={budget} />}
       <div className="flex items-end justify-between gap-4">
         <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Proposal</h1>
         <span className="text-sm text-muted-foreground tabular">
@@ -58,6 +72,7 @@ export function StepReview({
 
       <div className="grid gap-6 xl:grid-cols-[1fr_250px]">
         <div className="flex min-w-0 flex-col gap-4">
+          <fieldset disabled={revising} className="min-w-0">
           <Card className="relative overflow-hidden">
             <ul>
               <AnimatePresence initial={false}>
@@ -103,7 +118,7 @@ export function StepReview({
                         <Plus className="size-3" />
                       </button>
                     </div>
-                    <span className="hidden w-20 text-right text-sm tabular sm:block">{usd(item.qty * item.unitPrice)}</span>
+                    <span className="hidden w-20 text-right text-sm tabular sm:block">{usdPrecise(item.qty * item.unitPrice)}</span>
                     <button
                       onClick={() => remove(item.id)}
                       aria-label={`Remove ${item.name}`}
@@ -125,11 +140,12 @@ export function StepReview({
                   exit={{ opacity: 0 }}
                   className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm"
                 >
-                  <p className="shimmer-text font-serif text-2xl">Revising proposal…</p>
+                  <div role="status" className="px-5 text-center"><p className="shimmer-text font-serif text-2xl">Revising proposal…</p><p className="mt-2 text-sm text-muted-foreground">{revisionProgress}</p></div>
                 </motion.div>
               )}
             </AnimatePresence>
           </Card>
+          </fieldset>
 
           <form
             onSubmit={(e) => {
@@ -144,12 +160,13 @@ export function StepReview({
             </label>
             <input
               id="feedback"
+              disabled={revising}
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) e.preventDefault()
               }}
-              placeholder="Request changes — e.g. “add infant formula”"
+              placeholder="Try “halve the water quantity; keep everything else”"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             <Pressable type="submit" size="icon" disabled={!feedback.trim() || revising} aria-label="Send">
@@ -179,10 +196,10 @@ export function StepReview({
         <aside className="xl:sticky xl:top-26 xl:self-start">
           <Card className="p-5">
             <dl className="flex flex-col gap-2.5 text-sm">
-              <Row label="Items" value={usd(subtotal)} />
-              <Row label="Shipping" value={usd(plan.shipping)} />
-              <Row label="Non-profit discount" value={`−${usd(plan.discount)}`} accent />
-              <Row label="Tax" value={usd(plan.tax)} />
+              <Row label="Items" value={usdPrecise(subtotal)} />
+              <Row label="Shipping (estimated)" value={usdPrecise(plan.shipping)} />
+              <Row label="Non-profit discount" value={`−${usdPrecise(plan.discount)}`} accent />
+              <Row label="Tax (estimated)" value={usdPrecise(plan.tax)} />
             </dl>
             <div className="my-4 h-px bg-border" />
             <p className="text-xs text-muted-foreground">Total</p>
@@ -199,14 +216,14 @@ export function StepReview({
                 />
               </div>
               <p className={cn('mt-2 text-xs tabular', over ? 'text-destructive' : 'text-muted-foreground')}>
-                {over ? `${usd(total - budget)} over budget` : `${usd(budget - total)} remaining of ${usd(budget)}`}
+                {over ? `${usdPrecise(total - budget)} over budget` : `${usdPrecise(budget - total)} remaining of ${usdPrecise(budget)}`}
               </p>
             </div>
 
-            <Pressable size="lg" className="mt-5 w-full" disabled={over || plan.items.length === 0} onClick={onNext}>
+            <Pressable size="lg" className="mt-5 w-full" disabled={revising || over || plan.items.length === 0} onClick={onNext}>
               Checkout <ArrowRight />
             </Pressable>
-            <Pressable variant="ghost" size="sm" className="mt-2 w-full" onClick={onBack}>
+            <Pressable variant="ghost" size="sm" className="mt-2 w-full" disabled={revising} onClick={onBack}>
               <ArrowLeft /> Edit request
             </Pressable>
           </Card>
@@ -214,6 +231,25 @@ export function StepReview({
       </div>
     </div>
   )
+}
+
+function RevisionSummary({ before, after, request, budget }: { before: Plan; after: Plan; request: string; budget: number }) {
+  const changes = [...before.items.map(item => {
+    const next = after.items.find(p => p.id === item.id)
+    if (!next) return `Removed ${item.name} (${item.qty} units)`
+    if (next.qty !== item.qty) return `${item.name}: ${item.qty} → ${next.qty} units`
+    return null
+  }), ...after.items.filter(item => !before.items.some(p => p.id === item.id)).map(item => `Added ${item.name}: ${item.qty} units`)].filter(Boolean)
+  const unchanged = before.items.filter(item => after.items.some(p => p.id === item.id && p.qty === item.qty)).length
+  const previousTotal = planTotals(before).total
+  const nextTotal = planTotals(after).total
+  return <Card className="p-5" role="status">
+    <h2 className="font-medium">{after.fallbackReason ? 'Requested changes were not applied' : changes.length ? 'Review your revised proposal' : 'No item changes returned'}</h2>
+    <p className="mt-2 break-words text-sm text-muted-foreground">Your request: {request}</p>
+    <ul className="mt-3 space-y-1 text-sm">{changes.map((change, i) => <li key={i}>{change}</li>)}</ul>
+    <p className="mt-3 text-sm">{unchanged} item types unchanged · Total {usdPrecise(previousTotal)} → {usdPrecise(nextTotal)}</p>
+    <p className="mt-1 text-sm text-muted-foreground">{nextTotal <= budget ? `${usdPrecise(budget - nextTotal)} within the available budget` : `${usdPrecise(nextTotal - budget)} over budget`}. Review the product explanations below before checkout.</p>
+  </Card>
 }
 
 function Row({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
