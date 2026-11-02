@@ -7,7 +7,6 @@ import {
   ExternalLink,
   ReceiptText,
   ShieldCheck,
-  Sparkles,
 } from 'lucide-react'
 import type {
   Campaign,
@@ -21,6 +20,7 @@ import { usdPrecise } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import { Card, Pressable, inputClass, Label } from '../kit'
 import { FundingGraphic } from './funding-graphic'
+import { FinanceRadar } from './finance-radar'
 const dollars = (c: number) => usdPrecise(c / 100)
 const upsert = <T extends { id: string }>(list: T[], item: T) => [
   ...list.filter((i) => i.id !== item.id),
@@ -663,9 +663,7 @@ export function FinancePanel({
           </Card>
           <Card className="flex min-w-0 flex-col gap-4 p-5 sm:p-7">
             <div className="flex items-center gap-3">
-              <span className="inline-flex size-9 items-center justify-center rounded-full bg-brand-soft text-brand">
-                <Sparkles className="size-4" />
-              </span>
+              <FinanceRadar active={busy} />
               <h2 className="font-serif text-3xl tracking-tight">
                 Finance assistant
               </h2>
