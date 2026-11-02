@@ -33,8 +33,10 @@ export function AgentActivity({
   onDone,
   onProgress,
   onError,
+  requestContext,
 }: {
   prompt: string
+  requestContext?: string
   budget: number
   onDone: (p: Plan) => void
   onProgress: (n: number) => void
@@ -49,12 +51,12 @@ export function AgentActivity({
   useEffect(() => {
     if (started.current) return
     started.current = true
-    requestPlan({ prompt, budget }, (stage, detail) => {
+    requestPlan({ prompt: requestContext ?? prompt, budget }, (stage, detail) => {
       const mapped = [0, 2, 4, 5][stage] ?? 0
       setActive(mapped); setDetails(detail); cbs.current.onProgress(mapped)
     }).then(plan => { setActive(6); cbs.current.onDone(plan) })
       .catch(error => cbs.current.onError?.(error instanceof Error ? error.message : 'Discovery failed'))
-  }, [prompt, budget])
+  }, [prompt, budget, requestContext])
 
   return (
     <div className="flex flex-col gap-8" aria-live="polite">

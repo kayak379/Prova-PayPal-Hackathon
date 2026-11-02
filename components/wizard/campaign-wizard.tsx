@@ -15,6 +15,11 @@ import { StepCheckout } from './step-checkout'
 import { campaignSpent } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import type { Plan } from '@/lib/types'
+import {
+  discoveryRequest,
+  splitLegacyRequest,
+  type RequestAttachment,
+} from '@/lib/campaign-request'
 
 export type Draft = {
   name: string
@@ -70,8 +75,14 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
       : 0,
     1,
   ])
-  const [prompt, setPrompt] = useState(existing?.request || '')
-  const [csv, setCsv] = useState<{ name: string; rows: number } | null>(null)
+  const [prompt, setPrompt] = useState(
+    () => splitLegacyRequest(existing?.request || '').prompt,
+  )
+  const [csv, setCsv] = useState<RequestAttachment | null>(
+    () =>
+      existing?.requestAttachment ??
+      splitLegacyRequest(existing?.request || '').attachment,
+  )
   const [plan, setPlan] = useState<Plan | null>(existing?.proposal || null)
   const [agentProgress, setAgentProgress] = useState(-1)
   const [paying, setPaying] = useState(false)
@@ -79,8 +90,8 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
   const [discovering, setDiscovering] = useState(false)
 
   useEffect(() => {
-    if (createdId) saveProposal(createdId, prompt, plan)
-  }, [createdId, prompt, plan, saveProposal])
+    if (createdId) saveProposal(createdId, prompt, plan, csv)
+  }, [createdId, prompt, plan, csv, saveProposal])
 
   const go = (next: number) => setStep([next, next > step ? 1 : -1])
   const minStep = 0
@@ -183,7 +194,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
                 <StepReview
                   plan={plan}
                   setPlan={setPlan}
-                  prompt={prompt}
+                  prompt={discoveryRequest(prompt, csv)}
                   budget={draft.budget}
                   onBack={() => go(1)}
                   onNext={() => go(3)}

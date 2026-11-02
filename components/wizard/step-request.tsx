@@ -13,6 +13,10 @@ import { Pressable } from '../kit'
 import { AgentActivity } from './agent-activity'
 import { usd } from '@/lib/format'
 import type { Plan } from '@/lib/types'
+import {
+  discoveryRequest,
+  type RequestAttachment,
+} from '@/lib/campaign-request'
 
 const EXAMPLES = [
   'Category 4 hurricane, 2,000 displaced families in Houston. Need water, shelter and first aid for 3 days.',
@@ -34,8 +38,8 @@ export function StepRequest({
 }: {
   prompt: string
   setPrompt: (s: string) => void
-  csv: { name: string; rows: number } | null
-  setCsv: (c: { name: string; rows: number } | null) => void
+  csv: RequestAttachment | null
+  setCsv: (c: RequestAttachment | null) => void
   budget: number
   campaignName: string
   onPlan: (p: Plan) => void
@@ -53,11 +57,7 @@ export function StepRequest({
 
   const onFile = async (file: File) => {
     const text = await file.text()
-    const rows = Math.max(0, text.trim().split(/\r?\n/).length - 1)
-    setCsv({ name: file.name, rows })
-    setPrompt(
-      `${prompt}\nSupplies list (${file.name}):\n${text.slice(0, 8000)}`,
-    )
+    setCsv({ name: file.name, content: text.slice(0, 8000) })
   }
 
   const canBuild = prompt.trim().length > 8 || !!csv
@@ -66,6 +66,7 @@ export function StepRequest({
     return (
       <AgentActivity
         prompt={prompt || `Supplies list from ${csv?.name}`}
+        requestContext={discoveryRequest(prompt, csv)}
         budget={budget}
         onProgress={onProgress}
         onError={(message) => {
@@ -122,34 +123,8 @@ export function StepRequest({
           className="block w-full resize-none bg-transparent px-4 pt-3 text-lg leading-relaxed outline-none placeholder:text-muted-foreground/60"
         />
 
-        <AnimatePresence>
-          {csv && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="px-2"
-            >
-              <div className="mt-2 inline-flex items-center gap-2.5 rounded-xl bg-muted py-2 pl-3 pr-1.5 text-sm">
-                <FileSpreadsheet className="size-4 text-success" />
-                <span className="font-medium">{csv.name}</span>
-                <span className="text-muted-foreground tabular">
-                  {csv.rows} rows
-                </span>
-                <button
-                  onClick={() => setCsv(null)}
-                  aria-label="Remove file"
-                  className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="mt-2 flex items-center justify-between gap-2 p-1">
-          <div className="flex items-center gap-1">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 p-1">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1">
             <input
               ref={fileRef}
               type="file"
@@ -162,13 +137,53 @@ export function StepRequest({
                 e.target.value = ''
               }}
             />
-            <Pressable
-              variant="ghost"
-              size="sm"
-              onClick={() => fileRef.current?.click()}
-            >
-              <Paperclip /> CSV
-            </Pressable>
+            <AnimatePresence mode="wait" initial={false}>
+              {csv ? (
+                <motion.div
+                  key="attachment"
+                  initial={{ opacity: 0, x: -8, scale: 0.96 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.2 }}
+                  className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full bg-muted py-1 pl-3 pr-1 text-sm"
+                >
+                  <FileSpreadsheet className="size-4 shrink-0 text-success" />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="min-w-0 truncate font-medium hover:underline focus-visible:outline-ring"
+                    title={csv.name}
+                    aria-label={`Replace ${csv.name}`}
+                  >
+                    {csv.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCsv(null)}
+                    aria-label="Remove file"
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="upload"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <Pressable
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    <Paperclip /> CSV
+                  </Pressable>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground tabular">
               {usd(budget)} budget
             </span>
