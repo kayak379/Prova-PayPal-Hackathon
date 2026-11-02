@@ -5,17 +5,9 @@ import { motion, useReducedMotion } from 'motion/react'
 export function FundingGraphic() {
   const reduced = useReducedMotion()
   return (
-    <motion.svg
+    <svg
       viewBox="0 0 80 64"
       className="mb-3 h-16 w-20 text-brand"
-      initial={false}
-      animate={reduced ? { y: 0 } : { y: [0, -2, 0] }}
-      transition={{
-        delay: 1.5,
-        duration: 6,
-        repeat: Infinity,
-        ease: 'easeInOut',
-      }}
       aria-hidden="true"
     >
       <circle cx="40" cy="32" r="28" fill="var(--brand-soft)" />
@@ -49,6 +41,25 @@ export function FundingGraphic() {
             transition={{ duration: 0.5, delay: 0.2 + i * 0.15 }}
           />
         ))}
+        {!reduced &&
+          [20, 28, 36].map((y, i) => (
+            <motion.path
+              key={`shimmer-${y}`}
+              d={`M31 ${y} h${i === 2 ? 10 : 18}`}
+              stroke="var(--card)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeDasharray="4 40"
+              initial={{ opacity: 0, strokeDashoffset: 8 }}
+              animate={{ opacity: [0, 0.9, 0], strokeDashoffset: [8, -24] }}
+              transition={{
+                delay: 2 + i * 0.12,
+                duration: 1.1,
+                repeat: Infinity,
+                repeatDelay: 5,
+              }}
+            />
+          ))}
         <motion.circle
           cx="55"
           cy="46"
@@ -72,6 +83,6 @@ export function FundingGraphic() {
           transition={{ delay: reduced ? 0 : 1 }}
         />
       </motion.g>
-    </motion.svg>
+    </svg>
   )
 }
