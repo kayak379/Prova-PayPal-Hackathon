@@ -8,6 +8,7 @@ import type {
 import { priceCents } from '../money'
 import { sign, verify } from './common'
 import { paypal, paypalRest } from './paypal'
+import { invoiceQr } from './invoice-qr'
 const cents = (value: unknown) => Math.round(Number(value || 0) * 100)
 const money = (value: number) => ({
   currency_code: 'USD',
@@ -329,6 +330,13 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
   }
   const paid = cents(data.payments?.paid_amount?.value)
   let qr = local.qr
+  if (qr) {
+    try {
+      qr = invoiceQr(qr)
+    } catch {
+      qr = undefined
+    }
+  }
   let error: string | undefined =
     data.amount?.value && cents(data.amount.value) !== ref.amountCents
       ? 'Invoice amount differs from the prepared funding request.'
@@ -340,13 +348,7 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
         width: 300,
         height: 300,
       })
-      const raw =
-        typeof response === 'string'
-          ? response
-          : response.image || response.qr_code || response.data
-      if (typeof raw === 'string')
-        qr = raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`
-      else throw new Error('PayPal returned no QR image.')
+      qr = invoiceQr(response)
     } catch (e) {
       error = e instanceof Error ? e.message : 'QR unavailable'
     }
