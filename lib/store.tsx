@@ -40,7 +40,12 @@ type Store = {
     message?: string,
   ) => void
   hydrated: boolean
-  saveProposal: (id: string, request: string, proposal: Plan | null) => void
+  saveProposal: (
+    id: string,
+    request: string,
+    proposal: Plan | null,
+    attachment?: Campaign['requestAttachment'],
+  ) => void
   settings: Settings
   folders: Folder[]
   campaigns: Campaign[]
@@ -110,13 +115,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [hydrated, settings, folders, campaigns])
   const saveProposal = useCallback(
-    (id: string, request: string, proposal: Plan | null) => {
+    (
+      id: string,
+      request: string,
+      proposal: Plan | null,
+      attachment?: Campaign['requestAttachment'],
+    ) => {
       setCampaigns((list) =>
         list.map((c) =>
           c.id === id
             ? {
                 ...c,
                 request,
+                ...(attachment !== undefined
+                  ? { requestAttachment: attachment }
+                  : {}),
                 proposal,
                 audit:
                   proposal?.snapshot &&

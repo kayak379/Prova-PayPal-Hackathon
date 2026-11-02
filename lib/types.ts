@@ -60,6 +60,7 @@ export type AuditEntry = {
 }
 
 export type Campaign = {
+  requestAttachment?: { name: string; content: string } | null
   id: string
   name: string
   folderId: string
