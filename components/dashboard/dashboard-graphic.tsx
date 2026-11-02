@@ -59,8 +59,13 @@ export function DashboardGraphic() {
         </motion.g>
         <motion.g
           initial={false}
-          animate={reduced ? {} : { y: [0, -5, 0] }}
-          transition={{ duration: 4, repeat: 2, ease: 'easeInOut' }}
+          animate={reduced ? { y: 0 } : { y: [0, -3, 0] }}
+          transition={{
+            delay: 1.5,
+            duration: 5,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
         >
           <circle cx="197" cy="33" r="19" fill="#ffc439" />
           <path
