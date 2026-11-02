@@ -116,7 +116,7 @@
     pointer-events: none;
     background-image: url('/paper-grain.svg');
     background-size: 180px 180px;
-    opacity: 0.07;
+    opacity: 0.18;
     mix-blend-mode: multiply;
   }
   .tabular { font-variant-numeric: tabular-nums; }
