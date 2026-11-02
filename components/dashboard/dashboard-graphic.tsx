@@ -11,7 +11,12 @@ const STAGES = [
 export function DashboardGraphic() {
   const reduced = useReducedMotion()
   return (
-    <div className="relative flex min-h-60 items-center justify-center overflow-hidden rounded-2xl bg-primary px-5 py-4 text-primary-foreground">
+    <motion.div
+      initial={reduced ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.65, ease: 'easeOut' }}
+      className="relative flex min-h-60 items-center justify-center overflow-hidden rounded-2xl bg-primary px-5 py-4 text-primary-foreground"
+    >
       <svg
         viewBox="0 0 264 144"
         className="h-56 w-full max-w-xl"
@@ -123,6 +128,6 @@ export function DashboardGraphic() {
           From need to supplies
         </text>
       </svg>
-    </div>
+    </motion.div>
   )
 }
