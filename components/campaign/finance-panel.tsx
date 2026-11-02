@@ -1,5 +1,14 @@
 'use client'
 import { useRef, useState } from 'react'
+import {
+  ArrowRight,
+  ArrowUp,
+  CheckCircle2,
+  ExternalLink,
+  ReceiptText,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 import type {
   Campaign,
   FinanceAction,
@@ -200,15 +209,26 @@ export function FinancePanel({
   }
   const totals = financeTotals(campaign)
   const actionCard = (action: FinanceAction) => (
-    <Card key={action.operationId} className="my-3 p-4">
-      <p className="font-medium">{action.title}</p>
-      <p>{dollars(action.amountCents)} · PayPal sandbox</p>
+    <Card
+      key={action.operationId}
+      className="my-3 border-brand/25 bg-brand-soft/30 p-5"
+    >
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Review & confirm
+      </p>
+      <p className="mt-2 font-serif text-2xl tracking-tight">{action.title}</p>
+      <p className="my-3 text-2xl font-medium tracking-tight tabular">
+        {dollars(action.amountCents)}{' '}
+        <span className="text-xs font-normal text-muted-foreground">
+          · PayPal sandbox
+        </span>
+      </p>
       {action.items?.map((p) => (
         <p className="text-sm" key={p.id}>
           {p.qty} × {p.name} · {dollars(priceCents(p) * p.qty)}
         </p>
       ))}
-      <p className="my-2 text-xs text-muted-foreground">
+      <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
         {action.kind === 'invoice'
           ? `Merchandise only. Shipping and tax excluded. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
           : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
@@ -252,9 +272,20 @@ export function FinancePanel({
           </Card>
         ))}
       {mode === 'funding' && (
-        <>
-          <Card className="flex flex-col gap-3 p-5">
-            <h2 className="font-serif text-2xl">Sponsor this supply bundle</h2>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <Card className="flex min-w-0 flex-col gap-5 p-5 sm:p-7">
+            <div>
+              <span className="mb-3 inline-flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand">
+                <ReceiptText className="size-5" />
+              </span>
+              <h2 className="font-serif text-3xl tracking-tight">
+                Sponsor a supply bundle
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Choose supplies, then create an itemized funding request for
+                your sponsor.
+              </p>
+            </div>
             <Label htmlFor="funding-source">Source</Label>
             <select
               id="funding-source"
@@ -275,61 +306,94 @@ export function FinancePanel({
                 </option>
               ))}
             </select>
-            {products.map((p) => (
-              <label
-                key={p.id}
-                className="flex items-center justify-between gap-3 text-sm"
-              >
-                <span>
-                  {p.name} · {dollars(priceCents(p))}
-                </span>
+            <div className="overflow-hidden rounded-xl border border-border">
+              {products.length === 0 && (
+                <p className="p-5 text-sm text-muted-foreground">
+                  Create a proposal or purchase to choose supplies for funding.
+                </p>
+              )}
+              {products.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5 text-sm last:border-0"
+                >
+                  {p.imageUrl && (
+                    <img
+                      src={p.imageUrl}
+                      alt=""
+                      className="size-9 shrink-0 rounded-md object-contain"
+                    />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-pretty font-medium leading-snug">
+                      {p.name}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {dollars(priceCents(p))} per unit
+                    </span>
+                  </span>
+                  <input
+                    aria-label={`Sponsor quantity for ${p.name}`}
+                    className={inputClass + ' h-9 max-w-20 text-center tabular'}
+                    type="number"
+                    min="0"
+                    max={p.qty}
+                    value={selected[p.id] ?? p.qty}
+                    onChange={(e) => {
+                      setSelected({
+                        ...selected,
+                        [p.id]: Number(e.target.value),
+                      })
+                      setPrepared(null)
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <div>
+                <Label htmlFor="funding-sponsor">Sponsor name</Label>
                 <input
-                  aria-label={`Sponsor quantity for ${p.name}`}
-                  className={inputClass + ' max-w-24'}
-                  type="number"
-                  min="0"
-                  max={p.qty}
-                  value={selected[p.id] ?? p.qty}
+                  id="funding-sponsor"
+                  aria-label="Sponsor name"
+                  className={inputClass}
+                  placeholder="Sponsor name"
+                  value={sponsor}
                   onChange={(e) => {
-                    setSelected({ ...selected, [p.id]: Number(e.target.value) })
+                    setSponsor(e.target.value)
                     setPrepared(null)
                   }}
                 />
-              </label>
-            ))}
-            <input
-              aria-label="Sponsor name"
-              className={inputClass}
-              placeholder="Sponsor name"
-              value={sponsor}
-              onChange={(e) => {
-                setSponsor(e.target.value)
-                setPrepared(null)
-              }}
-            />
-            <input
-              aria-label={
-                emailInvoice
-                  ? 'Sponsor email required'
-                  : 'Sponsor email optional'
-              }
-              type="email"
-              required={emailInvoice}
-              className={inputClass}
-              placeholder={
-                emailInvoice
-                  ? 'Sponsor email (required)'
-                  : 'Sponsor email (optional)'
-              }
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value)
-                setPrepared(null)
-              }}
-            />
-            <label className="flex items-center gap-2 text-sm">
+              </div>
+              <div>
+                <Label htmlFor="funding-email">Sponsor email</Label>
+                <input
+                  id="funding-email"
+                  aria-label={
+                    emailInvoice
+                      ? 'Sponsor email required'
+                      : 'Sponsor email optional'
+                  }
+                  type="email"
+                  required={emailInvoice}
+                  className={inputClass}
+                  placeholder={
+                    emailInvoice
+                      ? 'Sponsor email (required)'
+                      : 'Sponsor email (optional)'
+                  }
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setPrepared(null)
+                  }}
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-3 text-sm">
               <input
                 type="checkbox"
+                className="size-4 accent-brand"
                 checked={emailInvoice}
                 onChange={(e) => {
                   setEmailInvoice(e.target.checked)
@@ -338,10 +402,26 @@ export function FinancePanel({
               />
               Email invoice to sponsor through PayPal
             </label>
-            <p className="text-sm text-muted-foreground">
-              Merchandise funding only; shipping and tax remain outside this
-              request. Funding does not increase the spending limit.
-            </p>
+            <div className="border-t border-border pt-5">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Funding request
+                </span>
+                <span className="text-2xl font-medium tracking-tight tabular">
+                  {dollars(
+                    products.reduce(
+                      (sum, p) =>
+                        sum + priceCents(p) * (selected[p.id] ?? p.qty),
+                      0,
+                    ),
+                  )}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                Merchandise only. Shipping and tax excluded. Sponsor funding
+                does not increase your spending limit.
+              </p>
+            </div>
             <Pressable
               disabled={
                 busy ||
@@ -350,70 +430,118 @@ export function FinancePanel({
                 (emailInvoice && !email.trim())
               }
               onClick={() => work(() => prepare('invoice'))}
+              className="self-end"
             >
-              Review funding request
+              Review request <ArrowRight />
             </Pressable>
           </Card>
-          {(campaign.funding || []).map((f) => (
-            <Card className="p-5" key={f.id}>
-              <h3 className="font-medium">
-                {f.sponsor} · {dollars(f.amountCents)}
-              </h3>
-              <p className="text-sm">
-                {f.status} · Received {dollars(f.receivedCents)} · Sandbox{' '}
-                {f.mock ? '· Mock product data' : ''}
-              </p>
-              {f.paymentUrl && (
-                <a
-                  className="block my-2 underline"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={f.paymentUrl}
-                >
-                  Open sponsor payment link
-                </a>
-              )}
-              {f.emailInvoice && (
-                <p className="my-2 text-xs text-muted-foreground">
-                  {f.emailRequestedAt
-                    ? `Email notification requested through PayPal for ${f.email}.`
-                    : `Invoice email enabled for ${f.email}. ${f.status === 'DRAFT' ? 'Publish the invoice to request delivery.' : 'Email delivery is not verified.'}`}
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="flex items-end justify-between gap-3">
+              <h2 className="font-serif text-3xl tracking-tight">
+                Funding requests
+              </h2>
+              <span className="text-sm text-muted-foreground tabular">
+                {(campaign.funding || []).length} invoices
+              </span>
+            </div>
+            <Card className="flex items-center justify-between gap-4 p-5">
+              <div>
+                <p className="text-xs text-muted-foreground">
+                  Confirmed sponsor funding
                 </p>
-              )}
-              {f.qr && (
-                <img
-                  src={f.qr}
-                  alt={`PayPal payment QR for ${f.sponsor}`}
-                  className="my-3 size-40"
-                />
-              )}
-              {f.error && <p className="text-sm text-destructive">{f.error}</p>}
-              <div className="mt-3 flex gap-2">
-                <Pressable
-                  disabled={busy}
-                  size="sm"
-                  onClick={() =>
-                    work(async () => apply(await api('invoice', { id: f.id })))
-                  }
-                >
-                  Refresh status
-                </Pressable>
-                <Pressable
-                  disabled={busy}
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => work(() => publish(f.id))}
-                >
-                  {f.status === 'DRAFT'
-                    ? f.emailInvoice
-                      ? 'Publish and email invoice'
-                      : 'Publish and get QR'
-                    : 'Get QR / payment link'}
-                </Pressable>
+                <p className="mt-2 text-3xl font-medium tracking-tight tabular">
+                  {dollars(totals.funding)}
+                </p>
               </div>
+              <CheckCircle2 className="size-6 text-brand" />
             </Card>
-          ))}
-        </>
+            {!campaign.funding?.length && (
+              <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+                <ReceiptText className="mx-auto mb-3 size-6 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  Your first sponsor starts here
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Create a funding request to share a PayPal payment link and QR
+                  code.
+                </p>
+              </div>
+            )}
+            {(campaign.funding || []).map((f) => (
+              <Card className="overflow-hidden p-5 sm:p-6" key={f.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Sponsor invoice
+                    </p>
+                    <h3 className="mt-1 font-serif text-2xl tracking-tight">
+                      {f.sponsor}
+                    </h3>
+                  </div>
+                  <p className="text-xl font-medium tracking-tight tabular">
+                    {dollars(f.amountCents)}
+                  </p>
+                </div>
+                <p className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  {f.status} · Received {dollars(f.receivedCents)} · Sandbox{' '}
+                  {f.mock ? '· Mock product data' : ''}
+                </p>
+                {f.paymentUrl && (
+                  <a
+                    className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-brand hover:underline"
+                    target="_blank"
+                    rel="noreferrer"
+                    href={f.paymentUrl}
+                  >
+                    Open payment link <ExternalLink className="size-3.5" />
+                  </a>
+                )}
+                {f.emailInvoice && (
+                  <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
+                    {f.emailRequestedAt
+                      ? `Email notification requested through PayPal for ${f.email}.`
+                      : `Invoice email enabled for ${f.email}. ${f.status === 'DRAFT' ? 'Publish the invoice to request delivery.' : 'Email delivery is not verified.'}`}
+                  </p>
+                )}
+                {f.qr && (
+                  <img
+                    src={f.qr}
+                    alt={`PayPal payment QR for ${f.sponsor}`}
+                    className="my-4 size-32 rounded-xl border border-border bg-white p-2"
+                  />
+                )}
+                {f.error && (
+                  <p className="text-sm text-destructive">{f.error}</p>
+                )}
+                <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
+                  <Pressable
+                    disabled={busy}
+                    size="sm"
+                    onClick={() =>
+                      work(async () =>
+                        apply(await api('invoice', { id: f.id })),
+                      )
+                    }
+                  >
+                    Refresh status
+                  </Pressable>
+                  <Pressable
+                    disabled={busy}
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => work(() => publish(f.id))}
+                  >
+                    {f.status === 'DRAFT'
+                      ? f.emailInvoice
+                        ? 'Publish and email invoice'
+                        : 'Publish and get QR'
+                      : 'Get QR / payment link'}
+                  </Pressable>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
       {mode === 'refund' && (
         <Card className="flex flex-col gap-3 p-4">
@@ -482,9 +610,18 @@ export function FinancePanel({
         </Card>
       )}
       {mode === 'finance' && (
-        <>
-          <Card className="p-5">
-            <dl className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <Card className="min-w-0 p-5 sm:p-7">
+            <div className="mb-6">
+              <ShieldCheck className="mb-3 size-6 text-brand" />
+              <h2 className="font-serif text-3xl tracking-tight">
+                Campaign finances
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Spending, refunds, and verified sponsor funding.
+              </p>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-5 gap-y-6 text-sm">
               {Object.entries({
                 'Gross purchases': totals.gross,
                 'Completed refunds': totals.refunds,
@@ -494,12 +631,15 @@ export function FinancePanel({
               }).map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="font-medium">{dollars(value)}</dd>
+                  <dd className="mt-2 text-2xl font-medium tracking-tight tabular">
+                    {dollars(value)}
+                  </dd>
                 </div>
               ))}
             </dl>
             <Pressable
-              className="mt-4"
+              className="mt-6"
+              variant="secondary"
               disabled={busy}
               onClick={() => work(async () => apply(await api('reconcile')))}
             >
@@ -522,14 +662,24 @@ export function FinancePanel({
               </div>
             )}
           </Card>
-          <Card className="flex flex-col gap-4 p-5">
-            <h2 className="font-serif text-2xl">Campaign finance assistant</h2>
+          <Card className="flex min-w-0 flex-col gap-4 p-5 sm:p-7">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex size-9 items-center justify-center rounded-full bg-brand-soft text-brand">
+                <Sparkles className="size-4" />
+              </span>
+              <h2 className="font-serif text-3xl tracking-tight">
+                Finance assistant
+              </h2>
+            </div>
             <p className="text-xs text-muted-foreground">
               Checks PayPal records and prepares actions. Financial changes
               require your confirmation.
             </p>
             {(campaign.financeMessages || []).map((m) => (
-              <div key={m.id} className="rounded-xl bg-muted/50 p-3">
+              <div
+                key={m.id}
+                className="rounded-xl border border-border bg-muted/30 p-4"
+              >
                 <p className="mb-1 text-xs font-medium">
                   {m.role === 'user' ? 'You' : 'Assistant'}
                 </p>
@@ -542,7 +692,9 @@ export function FinancePanel({
                 {m.actions?.map(actionCard)}
               </div>
             ))}
+            <Label htmlFor="finance-question">Ask about this campaign</Label>
             <textarea
+              id="finance-question"
               aria-label="Finance question"
               className={inputClass + ' h-24 py-3'}
               value={question}
@@ -552,11 +704,12 @@ export function FinancePanel({
             <Pressable
               disabled={busy || !question.trim()}
               onClick={() => work(ask)}
+              className="self-end"
             >
-              Ask assistant
+              Ask assistant <ArrowUp />
             </Pressable>
           </Card>
-        </>
+        </div>
       )}
       {prepared && actionCard(prepared)}
     </div>
