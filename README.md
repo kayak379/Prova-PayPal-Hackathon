@@ -1,5 +1,13 @@
 # Prova hackathon MVP
 
+## Demo flow
+
+1. Build a proposal, then request a specific revision such as “halve the water quantity; keep everything else.” Review the item changes, unchanged item count, and exact before/after totals. Revision failures preserve the request for retry, and checkout is disabled while revising.
+2. Complete PayPal sandbox checkout. The verified receipt shows the approved amount, completed capture, order/capture references, and remaining campaign budget. Fulfillment is simulated. The verified receipt is saved before its recovery ticket is removed.
+3. Choose **Manage payment & refunds** to open Finance. **Prepare a refund with the assistant** fills an editable request for up to $5 from the latest purchase; review it and choose **Ask assistant**. PayPal revalidates the refundable amount. Confirm the action card to submit the sandbox refund, then inspect its returned status, refund/capture references, net spending, and remaining budget. Pending refunds do not restore budget; use **Refresh refund status** to recheck. Failed requests retain the same pending operation for retry.
+
+Run `node --test tests/checkout.test.cjs tests/finance.test.cjs tests/discovery.test.cjs tests/product-selection.test.mjs tests/request-attachment.test.cjs` and `pnpm exec tsc --noEmit` to verify the demo flows without moving money.
+
 Run `pnpm install`, copy `.env.example` to `.env.local`, fill in the API credentials, then run `pnpm dev`. Open http://localhost:3000.
 
 Create a campaign, describe the emergency, build a proposal, adjust quantities or request a revision, then approve the proposal and continue to PayPal sandbox. Sign in with a **personal sandbox buyer account**, distinct from the sandbox business merchant configured in `.env.local`. After approval, the app verifies capture and records a receipt. If interrupted, reopen the campaign wizard and verify or resume the pending checkout.

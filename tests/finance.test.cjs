@@ -202,6 +202,8 @@ test('refund preparation verifies capture and rejects over-refunds', async () =>
     full: true,
   })
   assert.equal(a.amountCents, 700)
+  assert.equal(a.orderId, 'order1')
+  assert.equal(a.captureId, 'capture1')
   await assert.rejects(
     s.prepareFinance(c, {
       kind: 'refund',

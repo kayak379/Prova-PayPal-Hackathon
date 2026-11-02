@@ -172,6 +172,8 @@ export async function prepareFinance(
     items: payload.items,
     emailInvoice: payload.emailInvoice,
     email: payload.email,
+    orderId: payload.orderId,
+    captureId: payload.captureId,
   }
 }
 export async function confirmFinance(c: Campaign, token: string) {

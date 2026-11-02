@@ -39,6 +39,8 @@ export function FinancePanel({
   const latest = useRef(campaign)
   latest.current = campaign
   const [busy, setBusy] = useState(false)
+  const workLock = useRef(false)
+  const [activity, setActivity] = useState('Checking PayPal sandbox…')
   const [error, setError] = useState('')
   const [prepared, setPrepared] = useState<FinanceAction | null>(null)
   const [source, setSource] = useState(
@@ -61,10 +63,9 @@ export function FinancePanel({
   )
   function persist(patch: Partial<Campaign>, message?: string) {
     const c = latest.current
-    latest.current = { ...c, ...patch }
-    updateFinance(c.id, patch, message)
     try {
       const raw = localStorage.getItem('prova-workspace-v1')
+      if (!raw) throw new Error('Workspace missing')
       if (raw) {
         const data = JSON.parse(raw)
         data.campaigns = data.campaigns.map((v: Campaign) =>
@@ -77,6 +78,8 @@ export function FinancePanel({
         'Could not persist financial operation. Enable browser storage before continuing.',
       )
     }
+    latest.current = { ...c, ...patch }
+    updateFinance(c.id, patch, message)
   }
   async function api(action: string, extra: object = {}, c = latest.current) {
     const r = await fetch('/api/finance', {
@@ -88,7 +91,10 @@ export function FinancePanel({
     if (!r.ok) throw new Error(d.error || 'PayPal request failed')
     return d
   }
-  async function work(fn: () => Promise<void>) {
+  async function work(fn: () => Promise<void>, detail = 'Checking PayPal sandbox…') {
+    if (workLock.current) return
+    workLock.current = true
+    setActivity(detail)
     setBusy(true)
     setError('')
     try {
@@ -96,6 +102,7 @@ export function FinancePanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed')
     } finally {
+      workLock.current = false
       setBusy(false)
     }
   }
@@ -183,17 +190,18 @@ export function FinancePanel({
         { id: crypto.randomUUID(), role: 'user', text },
       ],
     })
-    setQuestion('')
     const r = await fetch('/api/finance/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ campaign: c, text, history }),
     })
     const d = await r.json()
-    if (!r.ok)
+    if (!r.ok) {
+      setQuestion(text)
       throw new Error(
         d.error || 'Assistant unavailable; guided controls remain available.',
       )
+    }
     if (d.patch && Object.keys(d.patch).length) apply(d.patch)
     persist({
       financeMessages: [
@@ -207,9 +215,25 @@ export function FinancePanel({
         },
       ],
     })
+    setQuestion('')
   }
   const totals = financeTotals(campaign)
-  const actionCard = (action: FinanceAction) => (
+  const refundResult = (refund: PurchaseRefund) => (
+    <div key={refund.id} className="my-3 rounded-xl border border-brand/25 bg-brand-soft/30 p-4" role="status">
+      <p className="font-medium">{refund.status === 'COMPLETED' ? 'Refund verified by PayPal' : `Refund status: ${refund.status}`}</p>
+      <p className="mt-2 text-xl tabular">{dollars(refund.amountCents)} · Sandbox</p>
+      <p className="mt-2 break-all font-mono text-xs text-muted-foreground">Refund: {refund.id}<br />Capture: {refund.captureId}</p>
+      <p className="mt-3 text-sm">{refund.status === 'COMPLETED' ? `${dollars(refund.amountCents)} deducted from net spending and credited back toward the campaign budget.` : 'Budget is unchanged until PayPal confirms completion.'}</p>
+      <p className="mt-2 text-sm">Net spending: {dollars(totals.net)} · Remaining budget: {dollars(totals.remaining)}</p>
+      <Pressable className="mt-3" size="sm" variant="secondary" disabled={busy} onClick={() => work(async () => apply(await api('refund', { id: refund.id })))}>Refresh refund status</Pressable>
+    </div>
+  )
+  const actionCard = (action: FinanceAction) => {
+    const result = (campaign.refunds || []).find(r => r.operationId === action.operationId)
+    if (result) return refundResult(result)
+    const completed = (campaign.financeOperations || []).some(op => op.id === action.operationId && op.status === 'completed')
+    const pending = (campaign.financeOperations || []).some(op => op.id === action.operationId && op.status === 'pending')
+    return (
     <Card
       key={action.operationId}
       className="my-3 border-brand/25 bg-brand-soft/30 p-5"
@@ -234,6 +258,10 @@ export function FinancePanel({
           ? `Merchandise only. Shipping and tax excluded. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
           : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
       </p>
+      {action.kind === 'refund' && <div className="mb-3 text-sm">
+        <p className="break-all text-xs text-muted-foreground">Purchase: {action.orderId || 'Verified campaign purchase'}{action.captureId && <> · Capture: {action.captureId}</>}</p>
+        <p className="mt-2">After completion, net spending decreases by {dollars(action.amountCents)}. Budget is restored only when PayPal confirms completion.</p>
+      </div>}
       <Pressable
         disabled={
           busy ||
@@ -241,12 +269,12 @@ export function FinancePanel({
             (op) => op.id === action.operationId && op.status === 'completed',
           )
         }
-        onClick={() => work(() => confirm(action))}
+        onClick={() => work(() => confirm(action), action.kind === 'refund' ? 'Submitting the confirmed refund and verifying its PayPal status…' : 'Creating your confirmed sponsor invoice…')}
       >
-        Confirm {action.kind === 'invoice' ? 'invoice' : 'refund'}
+        {completed ? 'Confirmed' : pending ? 'Retry same operation' : `Confirm ${action.kind === 'invoice' ? 'invoice' : 'refund'}`}
       </Pressable>
     </Card>
-  )
+  )}
   return (
     <div className="flex flex-col gap-5">
       {error && (
@@ -256,7 +284,7 @@ export function FinancePanel({
       )}
       {busy && (
         <p role="status" className="text-sm animate-pulse">
-          Checking PayPal sandbox…
+          {activity}
         </p>
       )}
       {(campaign.financeOperations || [])
@@ -549,7 +577,8 @@ export function FinancePanel({
             aria-label="Refund purchase"
             className={inputClass}
             value={orderId}
-            onChange={(e) => setOrderId(e.target.value)}
+            disabled={busy}
+            onChange={(e) => { setOrderId(e.target.value); setPrepared(null) }}
           >
             {campaign.orders.map((o) => (
               <option value={o.id} key={o.id}>
@@ -561,7 +590,8 @@ export function FinancePanel({
             <input
               type="checkbox"
               checked={full}
-              onChange={(e) => setFull(e.target.checked)}
+              disabled={busy}
+              onChange={(e) => { setFull(e.target.checked); setPrepared(null) }}
             />
             Full remaining refundable amount
           </label>
@@ -573,7 +603,8 @@ export function FinancePanel({
               min="0.01"
               step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              disabled={busy}
+              onChange={(e) => { setAmount(e.target.value); setPrepared(null) }}
               placeholder="Amount in USD"
             />
           )}
@@ -582,30 +613,18 @@ export function FinancePanel({
             className={inputClass}
             placeholder="Reason (optional)"
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            disabled={busy}
+            onChange={(e) => { setReason(e.target.value); setPrepared(null) }}
           />
           <Pressable
-            disabled={busy}
+            disabled={busy || !orderId || (!full && (!Number.isFinite(Number(amount)) || Number(amount) <= 0))}
             onClick={() => work(() => prepare('refund'))}
           >
             Review refund
           </Pressable>
           {(campaign.refunds || [])
             .filter((r) => r.orderId === orderId)
-            .map((r) => (
-              <p className="text-sm" key={r.id}>
-                {r.id} · {dollars(r.amountCents)} · {r.status}{' '}
-                <button
-                  className="underline"
-                  disabled={busy}
-                  onClick={() =>
-                    work(async () => apply(await api('refund', { id: r.id })))
-                  }
-                >
-                  Refresh
-                </button>
-              </p>
-            ))}
+            .map(refundResult)}
         </Card>
       )}
       {mode === 'finance' && (
@@ -672,6 +691,12 @@ export function FinancePanel({
               Checks PayPal records and prepares actions. Financial changes
               require your confirmation.
             </p>
+            {campaign.orders.length > 0 && <Pressable variant="secondary" size="sm" disabled={busy} onClick={() => {
+              const purchase = [...campaign.orders].sort((a, b) => b.createdAt - a.createdAt)[0]
+              const amountCents = Math.min(500, purchase.totalCents ?? Math.round(purchase.total * 100))
+              setQuestion(`Check purchase ${purchase.id} and prepare a ${dollars(amountCents)} refund for my review. Do not execute it yet.`)
+              document.getElementById('finance-question')?.focus()
+            }}>Prepare a refund with the assistant</Pressable>}
             {(campaign.financeMessages || []).map((m) => (
               <div
                 key={m.id}
@@ -695,12 +720,13 @@ export function FinancePanel({
               aria-label="Finance question"
               className={inputClass + ' h-24 py-3'}
               value={question}
+              disabled={busy}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="Did our last payment complete? Prepare a $10 refund for the latest purchase."
             />
             <Pressable
               disabled={busy || !question.trim()}
-              onClick={() => work(ask)}
+              onClick={() => work(ask, 'The assistant is checking campaign records and preparing your response…')}
               className="self-end"
             >
               Ask assistant <ArrowUp />
