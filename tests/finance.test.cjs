@@ -455,3 +455,142 @@ test('paid invoice records only verified received funding', async () => {
   assert.equal(result.status, 'PAID')
   assert.equal(result.error, undefined)
 })
+
+test('invoice email requires a valid recipient and binds preference into confirmation and invoice proof', async () => {
+  const s = setup(() => ({ id: 'inv-email' }))
+  const c = campaign()
+  const input = {
+    kind: 'invoice',
+    source: 'proposal',
+    sponsor: 'Sponsor',
+    items: [{ id: 'water', qty: 2 }],
+    emailInvoice: true,
+  }
+  await assert.rejects(s.prepareFinance(c, input), /email address is required/)
+  await assert.rejects(
+    s.prepareFinance(c, { ...input, email: 'bad-address' }),
+    /valid optional email/,
+  )
+  assert.equal(s.calls.length, 0)
+  const action = await s.prepareFinance(c, {
+    ...input,
+    email: 'sponsor@example.com',
+  })
+  assert.equal(action.emailInvoice, true)
+  assert.equal(action.email, 'sponsor@example.com')
+  const signed = JSON.parse(action.token)
+  assert.equal(signed.emailInvoice, true)
+  assert.equal(signed.email, action.email)
+  const { funding } = await s.confirmFinance(c, action.token)
+  assert.equal(funding.emailInvoice, true)
+  assert.equal(JSON.parse(funding.proof).email, action.email)
+  assert.equal(JSON.parse(funding.proof).emailInvoice, true)
+  assert.equal(
+    s.calls[0].args.primary_recipients[0].billing_info.email_address,
+    action.email,
+  )
+  assert.equal(s.calls.filter((x) => x.name === 'send_invoice').length, 0)
+})
+
+test('email publication notifies only the sponsor and does not resend after QR failure or refresh', async () => {
+  let status = 'DRAFT'
+  const s = setup((name) => {
+    if (name === 'create_invoice') return { id: 'inv-email' }
+    if (name === 'get_invoice')
+      return {
+        status,
+        amount: { value: '4.00' },
+        primary_recipients: [
+          { billing_info: { email_address: 'sponsor@example.com' } },
+        ],
+      }
+    if (name === 'send_invoice') {
+      status = 'UNPAID'
+      return {}
+    }
+    throw Error('QR unavailable')
+  })
+  const c = campaign()
+  const action = await s.prepareFinance(c, {
+    kind: 'invoice',
+    source: 'proposal',
+    sponsor: 'Sponsor',
+    email: 'sponsor@example.com',
+    emailInvoice: true,
+    items: [{ id: 'water', qty: 2 }],
+  })
+  c.funding = [(await s.confirmFinance(c, action.token)).funding]
+  const result = await s.refreshInvoice(c, 'inv-email', true)
+  assert.equal(result.status, 'UNPAID')
+  assert.equal(typeof result.emailRequestedAt, 'number')
+  assert.match(result.error, /QR unavailable/)
+  c.funding = [result]
+  await s.refreshInvoice(c, 'inv-email', true)
+  await s.refreshInvoice(c, 'inv-email')
+  const sends = s.calls.filter((x) => x.name === 'send_invoice')
+  assert.equal(sends.length, 1)
+  assert.equal(sends[0].args.send_to_recipient, true)
+  assert.equal(sends[0].args.send_to_invoicer, false)
+  assert.equal(sends[0].key, `publish-${action.operationId}`)
+})
+
+test('recipient changes at PayPal block email publication', async () => {
+  const s = setup(() => ({
+    status: 'DRAFT',
+    primary_recipients: [
+      { billing_info: { email_address: 'different@example.com' } },
+    ],
+  }))
+  const c = campaign()
+  c.funding = [
+    {
+      id: 'inv1',
+      operationId: 'op1',
+      proof: sign({
+        kind: 'invoice',
+        campaignId: c.id,
+        id: 'inv1',
+        amountCents: 400,
+        emailInvoice: true,
+        email: 'sponsor@example.com',
+      }),
+    },
+  ]
+  await assert.rejects(
+    s.refreshInvoice(c, 'inv1', true),
+    /differs from the confirmed recipient/,
+  )
+  assert.equal(s.calls.filter((x) => x.name === 'send_invoice').length, 0)
+})
+
+test('email remains opt-in even when an email is provided or browser records are changed', async () => {
+  const s = setup((name) =>
+    name === 'create_invoice'
+      ? { id: 'inv1' }
+      : name === 'get_invoice'
+        ? { status: 'DRAFT' }
+        : {},
+  )
+  const c = campaign()
+  const action = await s.prepareFinance(c, {
+    kind: 'invoice',
+    source: 'proposal',
+    sponsor: 'Sponsor',
+    email: 'sponsor@example.com',
+    items: [{ id: 'water', qty: 2 }],
+  })
+  assert.equal(action.emailInvoice, false)
+  c.funding = [
+    {
+      ...(await s.confirmFinance(c, action.token)).funding,
+      emailInvoice: true,
+    },
+  ]
+  const result = await s.refreshInvoice(c, 'inv1', true)
+  assert.equal(result.emailInvoice, false)
+  assert.equal(result.emailRequestedAt, undefined)
+  assert.equal(
+    s.calls.find((x) => x.name === 'send_invoice').args.send_to_recipient,
+    false,
+  )
+})
