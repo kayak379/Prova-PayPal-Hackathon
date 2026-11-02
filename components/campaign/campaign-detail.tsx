@@ -43,7 +43,7 @@ export function CampaignDetail({ id }: { id: string }) {
   const supplierCount = new Set(campaign.orders.map((o) => o.supplier)).size
 
   return (
-    <main className="mx-auto max-w-6xl px-5 pb-24 pt-8">
+    <main className="mx-auto max-w-6xl px-5 pb-24 pt-6 lg:pt-10">
       <Link
         href="/dashboard"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -51,11 +51,11 @@ export function CampaignDetail({ id }: { id: string }) {
         <ChevronLeft className="size-4" /> {folder?.name ?? 'Campaigns'}
       </Link>
 
-      <div className="mt-3 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mt-5 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <motion.h1
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-balance font-serif text-5xl tracking-tight"
+          className="min-w-0 break-words text-balance font-serif text-4xl tracking-tight sm:text-5xl"
         >
           {campaign.name}
         </motion.h1>
@@ -76,6 +76,10 @@ export function CampaignDetail({ id }: { id: string }) {
           </PressableLink>
         </div>
       </div>
+      <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+        Manage supplies, bring sponsors on board, and keep every payment in
+        view.
+      </p>
 
       <section
         aria-label="Campaign overview"
@@ -122,7 +126,7 @@ export function CampaignDetail({ id }: { id: string }) {
         <div
           role="tablist"
           aria-label="Campaign sections"
-          className="inline-flex gap-1 rounded-full bg-muted p-1"
+          className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-full bg-muted p-1"
         >
           {TABS.map((t) => (
             <button
@@ -131,7 +135,7 @@ export function CampaignDetail({ id }: { id: string }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
-                'relative h-8 rounded-full px-4 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                'relative h-9 shrink-0 rounded-full px-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:px-5',
                 tab === t
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
@@ -154,8 +158,25 @@ export function CampaignDetail({ id }: { id: string }) {
           role="tabpanel"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-5"
+          className="mt-6"
         >
+          {(tab === 'Orders' || tab === 'Audit log') && (
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-serif text-3xl tracking-tight">
+                  {tab === 'Orders' ? 'Your purchases' : 'Campaign activity'}
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {tab === 'Orders'
+                    ? 'Review supply bundles, payment receipts, and refunds.'
+                    : 'A history of decisions and financial updates.'}
+                </p>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                PayPal sandbox · Simulated fulfillment
+              </span>
+            </div>
+          )}
           {tab === 'Orders' ? (
             <OrdersList orders={campaign.orders} campaignId={campaign.id} />
           ) : tab === 'Funding' ? (
