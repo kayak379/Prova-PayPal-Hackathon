@@ -107,7 +107,7 @@ function setup(handler) {
     calls,
   }
 }
-test('invoice preparation validates source quantities and excludes tax/shipping', async () => {
+test('invoice preparation validates source quantities and includes estimated tax/shipping', async () => {
   const s = setup(() => {}),
     c = campaign()
   const action = await s.prepareFinance(c, {
@@ -116,7 +116,8 @@ test('invoice preparation validates source quantities and excludes tax/shipping'
     sponsor: 'Sponsor',
     items: [{ id: 'water', qty: 3 }],
   })
-  assert.equal(action.amountCents, 600)
+  assert.equal(action.amountCents, 678)
+  assert.deepEqual(action.charges, { subtotal: 600, shipping: 30, tax: 48, total: 678 })
   assert.equal(s.calls.length, 0)
   await assert.rejects(
     s.prepareFinance(c, {
@@ -608,4 +609,19 @@ test('email remains opt-in even when an email is provided or browser records are
     s.calls.find((x) => x.name === 'send_invoice').args.send_to_recipient,
     false,
   )
+})
+
+test('PayPal sponsor invoice line items exactly match the confirmed total including charges', async () => {
+  const s = setup(() => ({ id: 'inv-charges' }))
+  const c = campaign()
+  const action = await s.prepareFinance(c, { kind: 'invoice', source: 'proposal', sponsor: 'Sponsor', items: [{ id: 'water', qty: 3 }] })
+  const result = await s.confirmFinance(c, action.token)
+  const request = s.calls.find(call => call.name === 'create_invoice').args
+  const total = request.items.reduce((sum, item) => sum + Math.round(Number(item.unit_amount.value) * 100) * Number(item.quantity), 0)
+  assert.equal(total, action.amountCents)
+  assert.equal(result.funding.amountCents, 678)
+  assert.equal(request.items[1].name, 'Estimated shipping')
+  assert.equal(request.items[2].name, 'Estimated tax')
+  assert.deepEqual(result.funding.charges, action.charges)
+  assert.doesNotMatch(request.note, /excluded/)
 })

@@ -5,7 +5,7 @@ import type {
   PlanItem,
   PurchaseRefund,
 } from '../types'
-import { priceCents } from '../money'
+import { priceCents, totalsCents } from '../money'
 import { sign, verify } from './common'
 import { paypal, paypalRest } from './paypal'
 import { invoiceQr } from './invoice-qr'
@@ -140,16 +140,14 @@ export async function prepareFinance(
       )
     payload = {
       emailInvoice,
+      charges: totalsCents(items),
       kind: 'invoice',
       items,
       sponsor,
       email,
       mock,
       source: input.source,
-      amountCents: items.reduce(
-        (s: number, p: PlanItem) => s + priceCents(p) * p.qty,
-        0,
-      ),
+      amountCents: totalsCents(items).total,
     }
   } else throw new Error('Unknown financial action.')
   const signed = {
@@ -170,6 +168,7 @@ export async function prepareFinance(
         ? `Funding request for ${payload.sponsor}`
         : 'Refund sandbox purchase',
     items: payload.items,
+    charges: payload.charges,
     emailInvoice: payload.emailInvoice,
     email: payload.email,
     orderId: payload.orderId,
@@ -187,7 +186,7 @@ export async function confirmFinance(c: Campaign, token: string) {
       (f) => f.operationId === action.operationId,
     )
     if (existing) return { funding: existing }
-    await prepareFinance(c, {
+    const revalidated = await prepareFinance(c, {
       kind: 'invoice',
       source: action.source,
       sponsor: action.sponsor,
@@ -195,6 +194,11 @@ export async function confirmFinance(c: Campaign, token: string) {
       emailInvoice: action.emailInvoice === true,
       items: action.items.map((p: PlanItem) => ({ id: p.id, qty: p.qty })),
     })
+    if (revalidated.amountCents !== action.amountCents)
+      throw new Error(
+        'Funding charges changed. Prepare and confirm a new funding request.',
+      )
+    const charges = totalsCents(action.items)
     const result = await paypal(
       'create_invoice',
       {
@@ -210,12 +214,24 @@ export async function confirmFinance(c: Campaign, token: string) {
             },
           },
         ],
-        items: action.items.map((p: PlanItem) => ({
-          name: p.name.slice(0, 127),
-          quantity: String(p.qty),
-          unit_amount: money(priceCents(p)),
-        })),
-        note: `Sandbox sponsor funding for ${c.name}. Merchandise only; shipping and tax excluded. ${action.mock ? 'Mock product data. ' : ''}No retailer fulfillment.`,
+        items: [
+          ...action.items.map((p: PlanItem) => ({
+            name: p.name.slice(0, 127),
+            quantity: String(p.qty),
+            unit_amount: money(priceCents(p)),
+          })),
+          ...[
+            { name: 'Estimated shipping', value: charges.shipping },
+            { name: 'Estimated tax', value: charges.tax },
+          ]
+            .filter((charge) => charge.value > 0)
+            .map((charge) => ({
+              name: charge.name,
+              quantity: '1',
+              unit_amount: money(charge.value),
+            })),
+        ],
+        note: `Sandbox sponsor funding for ${c.name}. Includes estimated shipping and tax. ${action.mock ? 'Mock product data. ' : ''}No retailer fulfillment.`,
         allow_partial_payment: false,
         allow_tip: false,
       },
@@ -231,6 +247,7 @@ export async function confirmFinance(c: Campaign, token: string) {
       emailInvoice: action.emailInvoice === true,
       items: action.items,
       amountCents: action.amountCents,
+      charges,
       receivedCents: 0,
       status: 'DRAFT',
       mock: action.mock,

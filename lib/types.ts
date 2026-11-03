@@ -81,6 +81,7 @@ export type Campaign = {
 }
 
 export type FundingRequest = {
+  charges?: { subtotal: number; shipping: number; tax: number; total: number }
   emailInvoice?: boolean
   emailRequestedAt?: number
   id: string
@@ -109,6 +110,7 @@ export type PurchaseRefund = {
   proof: string
 }
 export type FinanceAction = {
+  charges?: { subtotal: number; shipping: number; tax: number; total: number }
   orderId?: string
   captureId?: string
   emailInvoice?: boolean

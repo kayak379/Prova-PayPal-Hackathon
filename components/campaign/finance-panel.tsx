@@ -16,7 +16,7 @@ import type {
   PurchaseRefund,
 } from '@/lib/types'
 import { financeTotals } from '@/lib/finance'
-import { priceCents } from '@/lib/money'
+import { priceCents, totalsCents } from '@/lib/money'
 import { usdPrecise } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import { Card, Pressable, inputClass, Label } from '../kit'
@@ -66,15 +66,23 @@ export function FinancePanel({
   const composer = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     const list = conversation.current
-    if (list && followMessages.current) list.scrollTo({ top: list.scrollHeight, behavior: reducedMotion ? 'instant' : 'smooth' })
+    if (list && followMessages.current)
+      list.scrollTo({
+        top: list.scrollHeight,
+        behavior: reducedMotion ? 'instant' : 'smooth',
+      })
   }, [campaign.financeMessages, campaign.refunds, asking, reducedMotion])
   function sendMessage() {
     if (!question.trim() || workLock.current) return
     followMessages.current = true
     void work(async () => {
       setAsking(true)
-      try { await ask() }
-      finally { setAsking(false); requestAnimationFrame(() => composer.current?.focus()) }
+      try {
+        await ask()
+      } finally {
+        setAsking(false)
+        requestAnimationFrame(() => composer.current?.focus())
+      }
     }, 'Checking campaign records…')
   }
   const [orderId, setOrderId] = useState(
@@ -110,7 +118,10 @@ export function FinancePanel({
     if (!r.ok) throw new Error(d.error || 'PayPal request failed')
     return d
   }
-  async function work(fn: () => Promise<void>, detail = 'Checking PayPal sandbox…') {
+  async function work(
+    fn: () => Promise<void>,
+    detail = 'Checking PayPal sandbox…',
+  ) {
     if (workLock.current) return
     workLock.current = true
     setActivity(detail)
@@ -238,62 +249,134 @@ export function FinancePanel({
   }
   const totals = financeTotals(campaign)
   const refundResult = (refund: PurchaseRefund) => (
-    <div key={refund.id} className="my-3 rounded-xl border border-brand/25 bg-brand-soft/30 p-4" role="status">
-      <p className="font-medium">{refund.status === 'COMPLETED' ? 'Refund verified by PayPal' : `Refund status: ${refund.status}`}</p>
-      <p className="mt-2 text-xl tabular">{dollars(refund.amountCents)} · Sandbox</p>
-      <p className="mt-2 break-all font-mono text-xs text-muted-foreground">Refund: {refund.id}<br />Capture: {refund.captureId}</p>
-      <p className="mt-3 text-sm">{refund.status === 'COMPLETED' ? `${dollars(refund.amountCents)} deducted from net spending and credited back toward the campaign budget.` : 'Budget is unchanged until PayPal confirms completion.'}</p>
-      <p className="mt-2 text-sm">Net spending: {dollars(totals.net)} · Remaining budget: {dollars(totals.remaining)}</p>
-      <Pressable className="mt-3" size="sm" variant="secondary" disabled={busy} onClick={() => work(async () => apply(await api('refund', { id: refund.id })))}>Refresh refund status</Pressable>
+    <div
+      key={refund.id}
+      className="my-3 rounded-xl border border-brand/25 bg-brand-soft/30 p-4"
+      role="status"
+    >
+      <p className="font-medium">
+        {refund.status === 'COMPLETED'
+          ? 'Refund verified by PayPal'
+          : `Refund status: ${refund.status}`}
+      </p>
+      <p className="mt-2 text-xl tabular">
+        {dollars(refund.amountCents)} · Sandbox
+      </p>
+      <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+        Refund: {refund.id}
+        <br />
+        Capture: {refund.captureId}
+      </p>
+      <p className="mt-3 text-sm">
+        {refund.status === 'COMPLETED'
+          ? `${dollars(refund.amountCents)} deducted from net spending and credited back toward the campaign budget.`
+          : 'Budget is unchanged until PayPal confirms completion.'}
+      </p>
+      <p className="mt-2 text-sm">
+        Net spending: {dollars(totals.net)} · Remaining budget:{' '}
+        {dollars(totals.remaining)}
+      </p>
+      <Pressable
+        className="mt-3"
+        size="sm"
+        variant="secondary"
+        disabled={busy}
+        onClick={() =>
+          work(async () => apply(await api('refund', { id: refund.id })))
+        }
+      >
+        Refresh refund status
+      </Pressable>
     </div>
   )
   const actionCard = (action: FinanceAction) => {
-    const result = (campaign.refunds || []).find(r => r.operationId === action.operationId)
+    const result = (campaign.refunds || []).find(
+      (r) => r.operationId === action.operationId,
+    )
     if (result) return refundResult(result)
-    const completed = (campaign.financeOperations || []).some(op => op.id === action.operationId && op.status === 'completed')
-    const pending = (campaign.financeOperations || []).some(op => op.id === action.operationId && op.status === 'pending')
+    const completed = (campaign.financeOperations || []).some(
+      (op) => op.id === action.operationId && op.status === 'completed',
+    )
+    const pending = (campaign.financeOperations || []).some(
+      (op) => op.id === action.operationId && op.status === 'pending',
+    )
     return (
-    <Card
-      key={action.operationId}
-      className="my-3 border-brand/25 bg-brand-soft/30 p-5"
-    >
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Review & confirm
-      </p>
-      <p className="mt-2 font-serif text-2xl tracking-tight">{action.title}</p>
-      <p className="my-3 text-2xl font-medium tracking-tight tabular">
-        {dollars(action.amountCents)}{' '}
-        <span className="text-xs font-normal text-muted-foreground">
-          · PayPal sandbox
-        </span>
-      </p>
-      {action.items?.map((p) => (
-        <p className="text-sm" key={p.id}>
-          {p.qty} × {p.name} · {dollars(priceCents(p) * p.qty)}
-        </p>
-      ))}
-      <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
-        {action.kind === 'invoice'
-          ? `Merchandise only. Shipping and tax excluded. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
-          : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
-      </p>
-      {action.kind === 'refund' && <div className="mb-3 text-sm">
-        <p className="break-all text-xs text-muted-foreground">Purchase: {action.orderId || 'Verified campaign purchase'}{action.captureId && <> · Capture: {action.captureId}</>}</p>
-        <p className="mt-2">After completion, net spending decreases by {dollars(action.amountCents)}. Budget is restored only when PayPal confirms completion.</p>
-      </div>}
-      <Pressable
-        disabled={
-          busy ||
-          (campaign.financeOperations || []).some(
-            (op) => op.id === action.operationId && op.status === 'completed',
-          )
-        }
-        onClick={() => work(() => confirm(action), action.kind === 'refund' ? 'Submitting the confirmed refund and verifying its PayPal status…' : 'Creating your confirmed sponsor invoice…')}
+      <Card
+        key={action.operationId}
+        className="my-3 border-brand/25 bg-brand-soft/30 p-5"
       >
-        {completed ? 'Confirmed' : pending ? 'Retry same operation' : `Confirm ${action.kind === 'invoice' ? 'invoice' : 'refund'}`}
-      </Pressable>
-    </Card>
-  )}
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Review & confirm
+        </p>
+        <p className="mt-2 font-serif text-2xl tracking-tight">
+          {action.title}
+        </p>
+        <p className="my-3 text-2xl font-medium tracking-tight tabular">
+          {dollars(action.amountCents)}{' '}
+          <span className="text-xs font-normal text-muted-foreground">
+            · PayPal sandbox
+          </span>
+        </p>
+        {action.items?.map((p) => (
+          <p className="text-sm" key={p.id}>
+            {p.qty} × {p.name} · {dollars(priceCents(p) * p.qty)}
+          </p>
+        ))}
+        {action.charges && (
+          <dl className="my-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+            <dt>Estimated shipping</dt>
+            <dd className="text-right tabular">
+              {dollars(action.charges.shipping)}
+            </dd>
+            <dt>Estimated tax</dt>
+            <dd className="text-right tabular">
+              {dollars(action.charges.tax)}
+            </dd>
+          </dl>
+        )}
+        <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
+          {action.kind === 'invoice'
+            ? `Includes estimated shipping and tax. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
+            : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
+        </p>
+        {action.kind === 'refund' && (
+          <div className="mb-3 text-sm">
+            <p className="break-all text-xs text-muted-foreground">
+              Purchase: {action.orderId || 'Verified campaign purchase'}
+              {action.captureId && <> · Capture: {action.captureId}</>}
+            </p>
+            <p className="mt-2">
+              After completion, net spending decreases by{' '}
+              {dollars(action.amountCents)}. Budget is restored only when PayPal
+              confirms completion.
+            </p>
+          </div>
+        )}
+        <Pressable
+          disabled={
+            busy ||
+            (campaign.financeOperations || []).some(
+              (op) => op.id === action.operationId && op.status === 'completed',
+            )
+          }
+          onClick={() =>
+            work(
+              () => confirm(action),
+              action.kind === 'refund'
+                ? 'Submitting the confirmed refund and verifying its PayPal status…'
+                : 'Creating your confirmed sponsor invoice…',
+            )
+          }
+        >
+          {completed
+            ? 'Confirmed'
+            : pending
+              ? 'Retry same operation'
+              : `Confirm ${action.kind === 'invoice' ? 'invoice' : 'refund'}`}
+        </Pressable>
+      </Card>
+    )
+  }
   return (
     <div className="flex flex-col gap-5">
       {error && (
@@ -455,18 +538,15 @@ export function FinancePanel({
                 </span>
                 <span className="text-2xl font-medium tracking-tight tabular">
                   {dollars(
-                    products.reduce(
-                      (sum, p) =>
-                        sum + priceCents(p) * (selected[p.id] ?? p.qty),
-                      0,
-                    ),
+                    totalsCents(
+                      products.map((p) => ({
+                        ...p,
+                        qty: selected[p.id] ?? p.qty,
+                      })),
+                    ).total,
                   )}
                 </span>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                Merchandise only. Shipping and tax excluded. Sponsor funding
-                does not increase your spending limit.
-              </p>
             </div>
             <Pressable
               disabled={
@@ -590,56 +670,132 @@ export function FinancePanel({
         </div>
       )}
       {mode === 'refund' && (
-        <Card className="flex flex-col gap-3 p-4">
-          <h3 className="font-medium">Refund sandbox purchase</h3>
-          <select
-            aria-label="Refund purchase"
-            className={inputClass}
-            value={orderId}
-            disabled={busy}
-            onChange={(e) => { setOrderId(e.target.value); setPrepared(null) }}
-          >
-            {campaign.orders.map((o) => (
-              <option value={o.id} key={o.id}>
-                {o.id}
-              </option>
-            ))}
-          </select>
-          <label className="flex gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={full}
-              disabled={busy}
-              onChange={(e) => { setFull(e.target.checked); setPrepared(null) }}
-            />
-            Full remaining refundable amount
-          </label>
-          {!full && (
-            <input
-              aria-label="Refund amount USD"
+        <Card className="flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand">
+              <ReceiptText className="size-5" />
+            </span>
+            <div>
+              <h3 className="font-serif text-2xl tracking-tight">
+                Request a refund
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Review the amount before confirming a sandbox refund.
+              </p>
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="refund-purchase">Purchase</Label>
+            <select
+              id="refund-purchase"
+              aria-label="Refund purchase"
               className={inputClass}
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={amount}
+              value={orderId}
               disabled={busy}
-              onChange={(e) => { setAmount(e.target.value); setPrepared(null) }}
-              placeholder="Amount in USD"
-            />
+              onChange={(e) => {
+                setOrderId(e.target.value)
+                setPrepared(null)
+              }}
+            >
+              {campaign.orders.map((o) => (
+                <option value={o.id} key={o.id}>
+                  {o.id}
+                </option>
+              ))}
+            </select>
+          </div>
+          <fieldset>
+            <legend className="mb-2 text-xs font-medium text-muted-foreground">
+              Refund amount
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                {
+                  value: true,
+                  title: 'Full refund',
+                  detail: 'All remaining refundable funds',
+                },
+                {
+                  value: false,
+                  title: 'Partial refund',
+                  detail: 'Enter an exact USD amount',
+                },
+              ].map((option) => (
+                <label
+                  key={option.title}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${full === option.value ? 'border-brand bg-brand-soft/40' : 'border-border hover:bg-muted/40'}`}
+                >
+                  <input
+                    type="radio"
+                    name={`refund-mode-${campaign.id}-${orderId}`}
+                    checked={full === option.value}
+                    disabled={busy}
+                    onChange={() => {
+                      setFull(option.value)
+                      setPrepared(null)
+                    }}
+                    className="mt-1 accent-brand"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">
+                      {option.title}
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {option.detail}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {!full && (
+            <div>
+              <Label htmlFor="refund-amount">Amount in USD</Label>
+              <input
+                id="refund-amount"
+                aria-label="Refund amount USD"
+                className={inputClass}
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={amount}
+                disabled={busy}
+                onChange={(e) => {
+                  setAmount(e.target.value)
+                  setPrepared(null)
+                }}
+                placeholder="0.00"
+              />
+            </div>
           )}
-          <input
-            aria-label="Refund reason"
-            className={inputClass}
-            placeholder="Reason (optional)"
-            value={reason}
-            disabled={busy}
-            onChange={(e) => { setReason(e.target.value); setPrepared(null) }}
-          />
+          <div>
+            <Label htmlFor="refund-reason">
+              Reason <span className="font-normal">(optional)</span>
+            </Label>
+            <input
+              id="refund-reason"
+              aria-label="Refund reason"
+              className={inputClass}
+              placeholder="Reason (optional)"
+              value={reason}
+              disabled={busy}
+              onChange={(e) => {
+                setReason(e.target.value)
+                setPrepared(null)
+              }}
+            />
+          </div>
           <Pressable
-            disabled={busy || !orderId || (!full && (!Number.isFinite(Number(amount)) || Number(amount) <= 0))}
+            disabled={
+              busy ||
+              !orderId ||
+              (!full &&
+                (!Number.isFinite(Number(amount)) || Number(amount) <= 0))
+            }
+            className="self-end"
             onClick={() => work(() => prepare('refund'))}
           >
-            Review refund
+            Review refund <ArrowRight />
           </Pressable>
           {(campaign.refunds || [])
             .filter((r) => r.orderId === orderId)
@@ -710,68 +866,166 @@ export function FinancePanel({
               Checks PayPal records and prepares actions. Financial changes
               require your confirmation.
             </p>
-            <div ref={conversation} role="log" aria-label="Conversation with finance assistant" aria-live="polite" aria-relevant="additions" onScroll={() => {
-              const list = conversation.current
-              if (list) followMessages.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80
-            }} className="flex h-[380px] min-h-0 flex-col gap-5 overflow-y-auto overscroll-contain px-4 py-5 sm:h-[440px] sm:px-6">
-            {!campaign.financeMessages?.length && <div className="my-auto px-3 py-8 text-center">
-              <ReceiptText className="mx-auto mb-4 size-7 text-brand" />
-              <p className="font-serif text-2xl">Let’s check the numbers</p>
-              <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">Ask whether a sponsor paid, check a purchase, or request a refund for review.</p>
-            </div>}
-            {(campaign.financeMessages || []).map((m) => (
-              <motion.div
-                key={m.id}
-                initial={{ opacity: 0, y: reducedMotion ? 0 : 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reducedMotion ? 0 : 0.25, ease: 'easeOut' }}
-                className={m.role === 'user' ? 'ml-auto w-fit max-w-[90%]' : 'mr-auto min-w-0 max-w-[95%]'}
-              >
-                <p className={'mb-1.5 px-1 text-[11px] font-medium text-muted-foreground ' + (m.role === 'user' ? 'text-right' : '')}>
-                  {m.role === 'user' ? 'You' : 'Prova'}
-                </p>
-                <div className={m.role === 'user' ? 'rounded-2xl rounded-tr-sm bg-brand px-4 py-3 text-brand-foreground' : 'rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3'}><ChatMessage text={m.text} /></div>
-                {!!m.trace?.length && <details className="mt-2 px-1 text-xs text-muted-foreground"><summary className="cursor-pointer py-1">PayPal checks · {m.trace.length}</summary>{m.trace.map((t, i) => (
-                  <p className="mt-2 break-words border-l border-border pl-3" key={i}>
-                    {t.tool} → {t.summary}
-                  </p>
-                ))}</details>}
-                {m.actions?.map(actionCard)}
-              </motion.div>
-            ))}
-            <AnimatePresence initial={false}>
-              {asking && <motion.div key="typing" role="status" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mr-auto">
-                <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">Prova</p>
-                <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3">
-                  <span aria-hidden="true" className="flex gap-1">{[0, 1, 2].map(i => <motion.span key={i} className="size-1.5 rounded-full bg-brand/70" animate={reducedMotion ? {} : { opacity: [0.35, 1, 0.35], y: [0, -3, 0] }} transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }} />)}</span>
-                  <span className="text-xs text-muted-foreground">Checking campaign records…</span>
-                </div>
-              </motion.div>}
-            </AnimatePresence>
-            </div>
-            <form className="border-t border-border bg-card px-4 pb-4 pt-3 sm:px-6" onSubmit={e => { e.preventDefault(); sendMessage() }}>
-            <label htmlFor="finance-question" className="sr-only">Message finance assistant</label>
-            <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-2 transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
-            <textarea
-              ref={composer}
-              id="finance-question"
-              aria-label="Finance question"
-              rows={2}
-              className="min-h-12 max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
-              value={question}
-              disabled={busy}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask about this campaign…"
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); sendMessage() } }}
-            />
-            <Pressable
-              disabled={busy || !question.trim()}
-              type="submit" size="icon" variant="brand" aria-label="Send message"
+            <div
+              ref={conversation}
+              role="log"
+              aria-label="Conversation with finance assistant"
+              aria-live="polite"
+              aria-relevant="additions"
+              onScroll={() => {
+                const list = conversation.current
+                if (list)
+                  followMessages.current =
+                    list.scrollHeight - list.scrollTop - list.clientHeight < 80
+              }}
+              className="flex h-[380px] min-h-0 flex-col gap-5 overflow-y-auto overscroll-contain px-4 py-5 sm:h-[440px] sm:px-6"
             >
-              <ArrowUp />
-            </Pressable>
+              {!campaign.financeMessages?.length && (
+                <div className="my-auto px-3 py-8 text-center">
+                  <ReceiptText className="mx-auto mb-4 size-7 text-brand" />
+                  <p className="font-serif text-2xl">Let’s check the numbers</p>
+                  <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                    Ask whether a sponsor paid, check a purchase, or request a
+                    refund for review.
+                  </p>
+                </div>
+              )}
+              {(campaign.financeMessages || []).map((m) => (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: reducedMotion ? 0 : 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: reducedMotion ? 0 : 0.25,
+                    ease: 'easeOut',
+                  }}
+                  className={
+                    m.role === 'user'
+                      ? 'ml-auto w-fit max-w-[90%]'
+                      : 'mr-auto min-w-0 max-w-[95%]'
+                  }
+                >
+                  <p
+                    className={
+                      'mb-1.5 px-1 text-[11px] font-medium text-muted-foreground ' +
+                      (m.role === 'user' ? 'text-right' : '')
+                    }
+                  >
+                    {m.role === 'user' ? 'You' : 'Prova'}
+                  </p>
+                  <div
+                    className={
+                      m.role === 'user'
+                        ? 'rounded-2xl rounded-tr-sm bg-brand px-4 py-3 text-brand-foreground'
+                        : 'rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3'
+                    }
+                  >
+                    <ChatMessage text={m.text} />
+                  </div>
+                  {!!m.trace?.length && (
+                    <details className="mt-2 px-1 text-xs text-muted-foreground">
+                      <summary className="cursor-pointer py-1">
+                        PayPal checks · {m.trace.length}
+                      </summary>
+                      {m.trace.map((t, i) => (
+                        <p
+                          className="mt-2 break-words border-l border-border pl-3"
+                          key={i}
+                        >
+                          {t.tool} → {t.summary}
+                        </p>
+                      ))}
+                    </details>
+                  )}
+                  {m.actions?.map(actionCard)}
+                </motion.div>
+              ))}
+              <AnimatePresence initial={false}>
+                {asking && (
+                  <motion.div
+                    key="typing"
+                    role="status"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="mr-auto"
+                  >
+                    <p className="mb-1.5 px-1 text-[11px] text-muted-foreground">
+                      Prova
+                    </p>
+                    <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3">
+                      <span aria-hidden="true" className="flex gap-1">
+                        {[0, 1, 2].map((i) => (
+                          <motion.span
+                            key={i}
+                            className="size-1.5 rounded-full bg-brand/70"
+                            animate={
+                              reducedMotion
+                                ? {}
+                                : { opacity: [0.35, 1, 0.35], y: [0, -3, 0] }
+                            }
+                            transition={{
+                              duration: 1,
+                              repeat: Infinity,
+                              delay: i * 0.15,
+                            }}
+                          />
+                        ))}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Checking campaign records…
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <p className="mt-2 px-1 text-[11px] text-muted-foreground">Enter to send · Shift + Enter for a new line</p>
+            <form
+              className="border-t border-border bg-card px-4 pb-4 pt-3 sm:px-6"
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendMessage()
+              }}
+            >
+              <label htmlFor="finance-question" className="sr-only">
+                Message finance assistant
+              </label>
+              <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-2 transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+                <textarea
+                  ref={composer}
+                  id="finance-question"
+                  aria-label="Finance question"
+                  rows={2}
+                  className="min-h-12 max-h-36 min-w-0 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+                  value={question}
+                  disabled={busy}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="Ask about this campaign…"
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === 'Enter' &&
+                      !e.shiftKey &&
+                      !e.nativeEvent.isComposing &&
+                      e.keyCode !== 229
+                    ) {
+                      e.preventDefault()
+                      sendMessage()
+                    }
+                  }}
+                />
+                <Pressable
+                  disabled={busy || !question.trim()}
+                  type="submit"
+                  size="icon"
+                  variant="brand"
+                  aria-label="Send message"
+                >
+                  <ArrowUp />
+                </Pressable>
+              </div>
+              <p className="mt-2 px-1 text-[11px] text-muted-foreground">
+                Enter to send · Shift + Enter for a new line
+              </p>
             </form>
           </Card>
         </div>
@@ -782,5 +1036,31 @@ export function FinancePanel({
 }
 
 function ChatMessage({ text }: { text: string }) {
-  return <div className="space-y-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{text.split('\n').map((line, i) => <p key={i} className={line ? '' : 'h-2'}>{line.replace(/^\s*[-*]\s+/, '• ').split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, j) => part.startsWith('**') && part.endsWith('**') ? <strong key={j} className="font-semibold">{part.slice(2, -2)}</strong> : part.startsWith('`') && part.endsWith('`') ? <code key={j} className="rounded bg-foreground/5 px-1 font-mono text-xs">{part.slice(1, -1)}</code> : part)}</p>)}</div>
+  return (
+    <div className="space-y-2 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">
+      {text.split('\n').map((line, i) => (
+        <p key={i} className={line ? '' : 'h-2'}>
+          {line
+            .replace(/^\s*[-*]\s+/, '• ')
+            .split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+            .map((part, j) =>
+              part.startsWith('**') && part.endsWith('**') ? (
+                <strong key={j} className="font-semibold">
+                  {part.slice(2, -2)}
+                </strong>
+              ) : part.startsWith('`') && part.endsWith('`') ? (
+                <code
+                  key={j}
+                  className="rounded bg-foreground/5 px-1 font-mono text-xs"
+                >
+                  {part.slice(1, -1)}
+                </code>
+              ) : (
+                part
+              ),
+            )}
+        </p>
+      ))}
+    </div>
+  )
 }
