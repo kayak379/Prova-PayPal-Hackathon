@@ -266,3 +266,234 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-ring, .animate-float { animation: none; }
 }
+
+/* Animate the palette itself so every surface, SVG, and gradient stays in sync.
+   Registered colors interpolate without overriding component motion transitions. */
+@property --background {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f6f2e7;
+}
+@property --foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #203e32;
+}
+@property --card {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffcf4;
+}
+@property --card-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #203e32;
+}
+@property --popover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffcf4;
+}
+@property --popover-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #203e32;
+}
+@property --primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --primary-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffcf4;
+}
+@property --secondary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #eaece0;
+}
+@property --secondary-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --muted {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #eaece0;
+}
+@property --muted-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #626f60;
+}
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3e9da;
+}
+@property --accent-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --brand {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2b6148;
+}
+@property --brand-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+@property --success-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffffff;
+}
+@property --graphic {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --graphic-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffcf4;
+}
+@property --warning {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffbeb;
+}
+@property --warning-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #451a03;
+}
+@property --warning-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fcd34d;
+}
+@property --paypal-wordmark-navy {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #003087;
+}
+@property --paypal-wordmark-blue {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #0070e0;
+}
+@property --brand-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e2ead9;
+}
+@property --success {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #357451;
+}
+@property --success-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e3eddc;
+}
+@property --destructive {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.577 0.2 27);
+}
+@property --border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d8ddcc;
+}
+@property --input {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #c8d1be;
+}
+@property --ring {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2b6148;
+}
+@property --chart-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2b6148;
+}
+@property --chart-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #6d9066;
+}
+@property --chart-3 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #9cad87;
+}
+@property --chart-4 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #c4c6a1;
+}
+@property --chart-5 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #203e32;
+}
+@property --sidebar {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #eeefdf;
+}
+@property --sidebar-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #203e32;
+}
+@property --sidebar-primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --sidebar-primary-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fffcf4;
+}
+@property --sidebar-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e2ead9;
+}
+@property --sidebar-accent-foreground {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #214e3a;
+}
+@property --sidebar-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d8ddcc;
+}
+@property --sidebar-ring {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2b6148;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    transition-property: --background, --foreground, --card, --card-foreground, --popover, --popover-foreground, --primary, --primary-foreground, --secondary, --secondary-foreground, --muted, --muted-foreground, --accent, --accent-foreground, --brand, --brand-foreground, --success-foreground, --graphic, --graphic-foreground, --warning, --warning-foreground, --warning-border, --paypal-wordmark-navy, --paypal-wordmark-blue, --brand-soft, --success, --success-soft, --destructive, --border, --input, --ring, --chart-1, --chart-2, --chart-3, --chart-4, --chart-5, --sidebar, --sidebar-foreground, --sidebar-primary, --sidebar-primary-foreground, --sidebar-accent, --sidebar-accent-foreground, --sidebar-border, --sidebar-ring;
+    transition-duration: 450ms;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+  }
+}
