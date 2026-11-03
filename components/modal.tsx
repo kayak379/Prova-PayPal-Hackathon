@@ -32,7 +32,11 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose, dismissable])
 
-  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false)
+  const mounted = useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  )
   if (!mounted) return null
 
   return createPortal(
@@ -56,12 +60,19 @@ export function Modal({
             animate={layoutId ? undefined : { opacity: 1, scale: 1, y: 0 }}
             exit={layoutId ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
             style={{ borderRadius: 24 }}
-            className={cn('relative w-full max-w-md overflow-hidden bg-card shadow-2xl', className)}
+            className={cn(
+              'relative w-full max-w-md overflow-hidden bg-card shadow-2xl',
+              className,
+            )}
           >
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { delay: 0.12 } }}
-              exit={{ opacity: 0, transition: { duration: 0.08 } }}
+              exit={
+                layoutId
+                  ? { opacity: 0, transition: { duration: 0.08 } }
+                  : undefined
+              }
               className="p-6"
             >
               <div className="mb-5 flex items-center justify-between">
