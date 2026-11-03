@@ -20,9 +20,9 @@ export function PaymentTap({ active, complete }: { active: boolean; complete: bo
     <div className="relative flex h-[230px] w-[280px] shrink-0 flex-col items-center justify-center">
       <div aria-hidden="true" className="relative h-[190px] w-full">
         <motion.div layoutId="payment-surface" transition={{ layout: { duration: reduceMotion ? 0 : 2.2, ease: [0.45, 0, 0.2, 1] } }} className="absolute bottom-0 right-8 h-[154px] w-[112px] rotate-[-8deg] rounded-[20px] border-2 border-white/30 bg-[#142e25] p-3 shadow-xl">
-          <motion.div initial={{ opacity: reduceMotion ? 1 : 0 }} animate={{ opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 0.8, duration: 1 }} className="flex h-[76px] flex-col items-center justify-center gap-1 rounded-lg bg-[#f6f2e7] text-primary">
+          <motion.div initial={{ opacity: reduceMotion ? 1 : 0 }} animate={{ opacity: 1 }} transition={{ delay: reduceMotion ? 0 : 0.8, duration: 1 }} className="flex h-[76px] flex-col items-center justify-center gap-1 rounded-lg bg-card text-foreground">
             {complete ? (
-              <motion.span initial={{ scale: reduceMotion ? 1 : 0 }} animate={{ scale: 1 }} className="flex size-8 items-center justify-center rounded-full bg-success text-white">
+              <motion.span initial={{ scale: reduceMotion ? 1 : 0 }} animate={{ scale: 1 }} className="flex size-8 items-center justify-center rounded-full bg-success text-success-foreground">
                 <Check className="size-5" strokeWidth={3} />
               </motion.span>
             ) : tapped ? (

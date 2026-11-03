@@ -83,10 +83,10 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="rounded-2xl border border-paypal-blue/20 bg-paypal-blue/5 p-4">
-        <div className="mb-3 flex items-center justify-between"><PayPalWordmark className="text-2xl" /><span className="text-xs text-paypal-navy">Sandbox</span></div>
+        <div className="mb-3 flex items-center justify-between"><PayPalWordmark className="text-2xl" /><span className="text-xs text-paypal-wordmark-navy">Sandbox</span></div>
         <p className="mb-1 truncate text-sm font-medium">{wallet.saved ? wallet.email : 'No PayPal account saved'}</p>
         <p className="mb-4 text-xs text-muted-foreground">{wallet.saved ? 'Saved securely with PayPal for purchases you approve in Prova.' : 'Save your PayPal account once for faster future purchases. No payment is taken when saving.'}</p>
-        <button type="button" disabled={walletBusy} onClick={savePayPal} className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paypal-gold text-sm font-semibold text-paypal-navy disabled:opacity-50">{walletBusy ? 'Connecting to' : wallet.saved ? 'Change saved' : 'Save'} <PayPalWordmark /></button>
+        <button type="button" disabled={walletBusy} onClick={savePayPal} className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paypal-gold text-sm font-semibold text-paypal-navy disabled:opacity-50">{walletBusy ? 'Connecting to' : wallet.saved ? 'Change saved' : 'Save'} <PayPalWordmark className="[--paypal-wordmark-navy:#003087] [--paypal-wordmark-blue:#00539c]" /></button>
         {wallet.saved && <button type="button" disabled={walletBusy} onClick={removePayPal} className="mt-3 w-full text-xs text-muted-foreground underline">Remove saved PayPal</button>}
         {walletError && <p role="alert" className="mt-3 text-xs text-destructive">{walletError}</p>}
 

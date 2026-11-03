@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 const STATUS: Record<OrderStatus, string> = {
   confirmed: 'bg-brand-soft text-brand',
   processing: 'bg-muted text-muted-foreground',
-  shipped: 'bg-paypal-blue/10 text-paypal-blue',
+  shipped: 'bg-paypal-blue/10 text-paypal-wordmark-blue',
   delivered: 'bg-success-soft text-success',
 }
 

@@ -33,8 +33,8 @@ export function Logo({ href = '/', className }: { href?: string; className?: str
 export function PayPalWordmark({ className }: { className?: string }) {
   return (
     <span className={cn('inline-flex items-baseline font-sans text-[1.15em] font-extrabold italic tracking-[-0.02em]', className)}>
-      <span className="text-paypal-navy">Pay</span>
-      <span className="text-paypal-blue">Pal</span>
+      <span className="text-paypal-wordmark-navy">Pay</span>
+      <span className="text-paypal-wordmark-blue">Pal</span>
     </span>
   )
 }

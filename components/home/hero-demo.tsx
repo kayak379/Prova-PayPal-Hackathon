@@ -87,7 +87,7 @@ export function HeroDemo() {
               <motion.span
                 layoutId="hero-pill"
                 style={{ borderRadius: 999 }}
-                className="inline-flex size-16 items-center justify-center bg-success text-white"
+                className="inline-flex size-16 items-center justify-center bg-success text-success-foreground"
               >
                 <Check className="size-7" strokeWidth={2.5} />
               </motion.span>

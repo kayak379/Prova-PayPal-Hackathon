@@ -41,7 +41,7 @@ export function StepCampaign({
           value={draft.name}
           onChange={(e) => set('name', e.target.value)}
           placeholder="Name this campaign"
-          className="w-full border-b border-border bg-transparent pb-3 font-serif text-4xl tracking-tight outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-foreground sm:text-5xl"
+          className="w-full border-b border-border bg-transparent pb-3 font-serif text-4xl tracking-tight outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground sm:text-5xl"
         />
       </div>
 

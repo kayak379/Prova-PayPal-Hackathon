@@ -730,7 +730,7 @@ export function FinancePanel({
                 <p className={'mb-1.5 px-1 text-[11px] font-medium text-muted-foreground ' + (m.role === 'user' ? 'text-right' : '')}>
                   {m.role === 'user' ? 'You' : 'Prova'}
                 </p>
-                <div className={m.role === 'user' ? 'rounded-2xl rounded-tr-sm bg-brand px-4 py-3 text-white' : 'rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3'}><ChatMessage text={m.text} /></div>
+                <div className={m.role === 'user' ? 'rounded-2xl rounded-tr-sm bg-brand px-4 py-3 text-brand-foreground' : 'rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-3'}><ChatMessage text={m.text} /></div>
                 {!!m.trace?.length && <details className="mt-2 px-1 text-xs text-muted-foreground"><summary className="cursor-pointer py-1">PayPal checks · {m.trace.length}</summary>{m.trace.map((t, i) => (
                   <p className="mt-2 break-words border-l border-border pl-3" key={i}>
                     {t.tool} → {t.summary}

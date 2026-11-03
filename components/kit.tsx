@@ -9,7 +9,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'brand'
 
 const variants: Record<Variant, string> = {
   primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_1px_0_0_rgba(255,255,255,0.15)_inset,0_6px_16px_-8px_rgba(15,20,30,0.5)]',
-  brand: 'bg-brand text-white hover:bg-brand/90 shadow-[0_6px_16px_-8px_var(--brand)]',
+  brand: 'bg-brand text-brand-foreground hover:bg-brand/90 shadow-[0_6px_16px_-8px_var(--brand)]',
   secondary: 'bg-card text-foreground border border-border hover:border-foreground/20',
   ghost: 'text-muted-foreground hover:text-foreground hover:bg-muted',
 }
@@ -72,7 +72,7 @@ export function PressableLink({
 }
 
 export const inputClass =
-  'w-full rounded-xl border border-input bg-card px-3.5 h-11 text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none transition-[border-color,box-shadow] focus:border-brand focus:shadow-[0_0_0_4px_var(--brand-soft)]'
+  'w-full rounded-xl border border-input bg-card px-3.5 h-11 text-[15px] text-foreground placeholder:text-muted-foreground outline-none transition-[border-color,box-shadow] focus:border-brand focus:shadow-[0_0_0_4px_var(--brand-soft)]'
 
 export function Label({ htmlFor, children, hint }: { htmlFor?: string; children: React.ReactNode; hint?: React.ReactNode }) {
   return (

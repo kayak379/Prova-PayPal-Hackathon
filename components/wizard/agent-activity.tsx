@@ -117,7 +117,7 @@ export function AgentActivity({
                             key={t}
                             initial={{ opacity: 0, x: -6 }}
                             animate={{ opacity: 1, x: 0, transition: { delay: 0.15 + k * 0.18 } }}
-                            className="font-mono text-xs text-muted-foreground/80"
+                            className="font-mono text-xs text-muted-foreground"
                           >
                             <span className="text-brand">›</span> {t}
                           </motion.li>

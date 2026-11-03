@@ -48,7 +48,7 @@ export function StepGraphic({
   const graphicId = useId()
 
   return (
-    <div className="relative flex h-52 flex-col overflow-hidden rounded-[28px] bg-primary text-primary-foreground lg:h-full">
+    <div className="relative flex h-52 flex-col overflow-hidden rounded-[28px] bg-graphic text-graphic-foreground lg:h-full">
       <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_50%_45%,rgba(255,255,255,0.07),transparent)]" />
 
       <LayoutGroup id={graphicId}>

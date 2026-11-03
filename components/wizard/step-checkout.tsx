@@ -119,7 +119,7 @@ export function StepCheckout({ plan, draft, existingId, onPayingChange, onPaymen
  if (receipt && existingId) return <Receipt orders={[receipt]} total={receipt.total} campaignId={existingId} remainingCents={campaigns.find(c => c.id === existingId) ? financeTotals(campaigns.find(c => c.id === existingId)!).remaining : undefined} />
   return (
     <div className="flex flex-col gap-6">
-      {plan.mock && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Mock data — sandbox checkout</p><p>Products and prices are sample data. PayPal will process a real sandbox test transaction; no goods will be ordered.</p></div>}
+      {plan.mock && <div role="status" className="rounded-xl border border-warning-border bg-warning p-4 text-sm text-warning-foreground"><p className="font-semibold">Mock data — sandbox checkout</p><p>Products and prices are sample data. PayPal will process a real sandbox test transaction; no goods will be ordered.</p></div>}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {pending && !busy && <div className="flex gap-3"><Pressable size="sm" onClick={() => capture(pending)}>Verify payment</Pressable><button type="button" className="text-sm underline" onClick={resumePayment}>Resume PayPal approval</button></div>}
       <h1 className="font-serif text-4xl tracking-tight sm:text-5xl">{phase === 'processing' ? 'Completing payment' : 'Checkout'}</h1>
@@ -245,7 +245,7 @@ function ApproveForm({ total, count, onApprove }: { total: number; count: number
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
                 transition={spring}
-                className="absolute right-3 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-success text-white"
+                className="absolute right-3 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-success text-success-foreground"
               >
                 <Check className="size-3.5" strokeWidth={3} />
               </motion.span>
@@ -272,7 +272,7 @@ function Receipt({ orders, total, campaignId, remainingCents }: { orders: Order[
         initial={{ scale: 0.4, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={spring}
-        className="relative inline-flex size-20 items-center justify-center rounded-full bg-success text-white"
+        className="relative inline-flex size-20 items-center justify-center rounded-full bg-success text-success-foreground"
       >
         <span className="animate-ring absolute inset-0 rounded-full border-2 border-success" />
         <motion.span initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: 0.15, ...spring }}>

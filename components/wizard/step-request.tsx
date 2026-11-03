@@ -120,7 +120,7 @@ export function StepRequest({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe the disaster, how many people are affected, and what they need…"
-          className="block w-full resize-none bg-transparent px-4 pt-3 text-lg leading-relaxed outline-none placeholder:text-muted-foreground/60"
+          className="block w-full resize-none bg-transparent px-4 pt-3 text-lg leading-relaxed outline-none placeholder:text-muted-foreground"
         />
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 p-1">

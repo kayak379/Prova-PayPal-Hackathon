@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 const ACTOR: Record<AuditActor, { label: string; className: string; icon: React.ReactNode }> = {
   agent: { label: 'Agent', className: 'bg-brand-soft text-brand', icon: <Sparkles className="size-3.5" /> },
   user: { label: 'You', className: 'bg-muted text-foreground', icon: <User className="size-3.5" /> },
-  paypal: { label: 'PayPal', className: 'bg-paypal-blue/10 text-paypal-navy', icon: <PayPalMark className="size-3.5" /> },
+  paypal: { label: 'PayPal', className: 'bg-paypal-blue/10 text-paypal-wordmark-navy', icon: <PayPalMark className="size-3.5" /> },
 }
 
 export function AuditLog({ entries }: { entries: AuditEntry[] }) {

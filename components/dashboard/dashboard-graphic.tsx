@@ -12,7 +12,7 @@ export function DashboardGraphic() {
   const reduced = useReducedMotion()
   return (
     <div
-      className="relative flex min-h-60 items-center justify-center overflow-hidden rounded-2xl bg-primary px-5 py-4 text-primary-foreground"
+      className="relative flex min-h-60 items-center justify-center overflow-hidden rounded-2xl bg-graphic px-5 py-4 text-graphic-foreground"
     >
       <motion.svg
         initial={reduced ? false : { opacity: 0 }}
@@ -84,7 +84,7 @@ export function DashboardGraphic() {
               y="18"
               textAnchor="middle"
               fill="#dce9d8"
-              opacity=".55"
+              opacity=".85"
               fontSize="9"
               fontFamily="inherit"
             >
@@ -105,7 +105,7 @@ export function DashboardGraphic() {
         ))}
         <g
           fill="none"
-          stroke="var(--primary)"
+          stroke="var(--graphic)"
           strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -121,7 +121,7 @@ export function DashboardGraphic() {
           y="131"
           textAnchor="middle"
           fill="#dce9d8"
-          opacity=".5"
+          opacity=".85"
           fontSize="9"
           fontFamily="inherit"
         >
