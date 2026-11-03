@@ -1,6 +1,6 @@
 'use client'
 
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { ChevronLeft, Download, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
@@ -23,12 +23,15 @@ export function CampaignDetail({ id }: { id: string }) {
   const { campaigns, folders } = useStore()
   const [tab, setTab] = useState<(typeof TABS)[number]>('Orders')
   useEffect(() => {
-    const selectFinance = () => { if (window.location.hash === '#finance') setTab('Finance') }
+    const selectFinance = () => {
+      if (window.location.hash === '#finance') setTab('Finance')
+    }
     selectFinance()
     window.addEventListener('hashchange', selectFinance)
     return () => window.removeEventListener('hashchange', selectFinance)
   }, [])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const reducedMotion = useReducedMotion()
   const fmt = useCallback((n: number) => usd(n), [])
   const count = useCallback((n: number) => Math.round(n).toString(), [])
   const campaign = campaigns.find((c) => c.id === id)
@@ -47,7 +50,15 @@ export function CampaignDetail({ id }: { id: string }) {
   const spent = campaignSpent(campaign)
   const remaining = Math.max(0, campaign.budget - spent)
   const folder = folders.find((f) => f.id === campaign.folderId)
-  const supplierCount = new Set(campaign.orders.map((o) => o.supplier)).size
+  const supplierCount = new Set(
+    campaign.orders
+      .flatMap((o) =>
+        o.items.length
+          ? o.items.map((item) => item.supplier.trim().toLowerCase())
+          : [o.supplier.trim().toLowerCase()],
+      )
+      .filter(Boolean),
+  ).size
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-24 pt-6 lg:pt-10">
@@ -73,7 +84,14 @@ export function CampaignDetail({ id }: { id: string }) {
             aria-label="Campaign settings"
             onClick={() => setSettingsOpen(true)}
           >
-            <Settings />
+            <motion.span
+              initial={false}
+              animate={{ rotate: reducedMotion ? 0 : settingsOpen ? 180 : 0 }}
+              transition={{ duration: 0.45, ease: 'easeInOut' }}
+              className="inline-flex"
+            >
+              <Settings />
+            </motion.span>
           </Pressable>
           <PressableLink
             href={`/campaigns/new?campaign=${campaign.id}`}
