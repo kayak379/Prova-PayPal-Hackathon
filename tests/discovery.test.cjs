@@ -19,10 +19,10 @@ const { allocateBudget } = load('lib/server/budget-allocation.ts', {})
 const { totalsCents } = load('lib/money.ts', {})
 
 test('budget allocation fills useful quantities without exceeding rounded charges or dropping products', () => {
- const items = [137, 299, 71].map((price, i) => ({ id: `p${i}`, unitPriceCents: price, unitPrice: price / 100, qty: i + 1 }))
- for (const budget of [573, 1000, 1001, 5000, 9999, 10000, 100000, 1000000]) {
+ const items = [137, 299, 71, 89].map((price, i) => ({ id: `p${i}`, unitPriceCents: price, unitPrice: price / 100, qty: i + 1 }))
+ for (const budget of [674, 1000, 1001, 5000, 9999, 10000, 100000, 1000000]) {
   const allocated = allocateBudget(items, budget)
-  assert.equal(allocated.length, 3)
+  assert.equal(allocated.length, 4)
   assert(allocated.every(item => Number.isSafeInteger(item.qty) && item.qty >= 1 && item.qty <= 999999))
   assert(totalsCents(allocated).total <= budget)
   for (let i = 0; i < allocated.length; i++) {
@@ -30,9 +30,9 @@ test('budget allocation fills useful quantities without exceeding rounded charge
    assert(totalsCents(extra).total > budget, 'No further selected unit should fit the remaining budget')
   }
  }
- assert.deepEqual(items.map(item => item.qty), [1, 2, 3], 'Input choices remain unchanged')
+ assert.deepEqual(items.map(item => item.qty), [1, 2, 3, 4], 'Input choices remain unchanged')
  assert.throws(() => allocateBudget(items, 100), /budget cannot cover/)
- assert.throws(() => allocateBudget(items.slice(0, 2), 10000), /at least three/)
+ assert.throws(() => allocateBudget(items.slice(0, 2), 10000), /at least four/)
 })
 function harness(responses) {
  const requests = []
@@ -41,7 +41,7 @@ function harness(responses) {
   env: () => 'test', sign: JSON.stringify, verify: JSON.parse,
   external: async (url, init) => {
    const body = JSON.parse(init.body)
-   if (url.includes('channel3')) return { products: [product('opaque-Channel3-ID-A', 'Blanket'), product('opaque-Channel3-ID-B', 'Water'), product('opaque-Channel3-ID-C', 'First aid')] }
+   if (url.includes('channel3')) return { products: [product('opaque-Channel3-ID-A', 'Blanket'), product('opaque-Channel3-ID-B', 'Water'), product('opaque-Channel3-ID-C', 'First aid'), product('opaque-Channel3-ID-D', 'Masks')] }
    const gemini = url.includes('generativelanguage.googleapis.com')
    providers.push(gemini ? 'gemini' : 'openrouter')
    requests.push(JSON.parse(gemini ? body.contents[0].parts[0].text : body.messages[1].content))
@@ -54,41 +54,41 @@ function harness(responses) {
  return { discover: load('lib/server/discovery.ts', common).discover, requests, providers }
 }
 test('short model references map back to authentic catalog IDs and prices', async () => {
- const h = harness([{ queries: ['bulk blankets'] }, { items: [{ id: ' P1 ', qty: '2', explanation: 'Keeps evacuees warm.' }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }] }])
+ const h = harness([{ queries: ['bulk blankets'] }, { items: [{ id: ' P1 ', qty: '2', explanation: 'Keeps evacuees warm.' }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await h.discover({ prompt, budget: 100 }, () => {})
  assert.equal(h.requests[1].candidates[0].id, 'p1')
  assert.equal(plan.items[0].id, 'opaque-Channel3-ID-A')
  assert.equal(plan.items[0].unitPriceCents, 1000)
- assert.equal(plan.items[0].qty, 4)
+ assert.equal(plan.items[0].qty, 5)
  assert.equal(plan.shipping, 4)
  assert.equal(plan.tax, 6.4)
  assert.equal(JSON.parse(plan.snapshot).products[0].id, 'opaque-Channel3-ID-A')
 })
 test('repair receives the rejected response and specific validation error', async () => {
  const bad = { items: [{ id: 'made-up', qty: 2 }] }
- const h = harness([{ queries: ['water cases'] }, bad, { items: [{ id: 'p2', qty: 2 }, { id: 'p1', qty: 1 }, { id: 'p3', qty: 1 }] }])
+ const h = harness([{ queries: ['water cases'] }, bad, { items: [{ id: 'p2', qty: 2 }, { id: 'p1', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await h.discover({ prompt, budget: 100 }, () => {})
  assert.deepEqual(h.requests[2].previousResponse, bad)
  assert.match(h.requests[2].validationError, /Unknown product reference/)
  assert.equal(plan.items[0].id, 'opaque-Channel3-ID-B')
 })
 
-test('selection with fewer than three products is repaired before allocating the full budget', async () => {
- const h = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }] }])
+test('selection with fewer than four products is repaired before allocating the full budget', async () => {
+ const h = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await h.discover({ prompt, budget: 100 }, () => {})
- assert.match(h.requests[2].validationError, /at least three/)
- assert.equal(plan.items.length, 3)
+ assert.match(h.requests[2].validationError, /at least four/)
+ assert.equal(plan.items.length, 4)
  assert(totalsCents(plan.items).total <= 10000)
  assert(totalsCents(plan.items).total >= 9000)
 })
 
-test('a budget that cannot cover three real products returns an actionable error', async () => {
+test('a budget that cannot cover four real products returns an actionable error', async () => {
  const h = harness([{ queries: ['bulk supplies'] }])
- await assert.rejects(h.discover({ prompt, budget: 20 }, () => {}), /three products are required/)
+ await assert.rejects(h.discover({ prompt, budget: 20 }, () => {}), /four products are required/)
  assert.equal(h.requests.length, 1)
 })
 test('revision references preserve unrelated original items exactly', async () => {
- const first = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 3 }, { id: 'p3', qty: 1 }] }])
+ const first = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 3 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await first.discover({ prompt, budget: 100 }, () => {})
  const edit = harness([{ queries: [] }, { edits: [{ action: 'remove', id: 'p1' }] }])
  const revised = await edit.discover({ prompt, budget: 100, feedback: 'Remove only the blanket.', currentPlan: plan }, () => {})
@@ -107,7 +107,7 @@ test('AI rate limits produce labeled signed mock data within budget', async () =
  assert.equal(JSON.parse(plan.snapshot).mock, true)
 })
 test('failed AI revisions retain existing products and disclose unapplied feedback', async () => {
- const first = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 3 }, { id: 'p3', qty: 1 }] }])
+ const first = harness([{ queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 3 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await first.discover({ prompt, budget: 100 }, () => {})
  const edit = harness(Array.from({ length: 6 }, () => new Error('AI unavailable')))
  const result = await edit.discover({ prompt, budget: 100, feedback: 'Remove blankets', currentPlan: plan }, () => {})
@@ -122,7 +122,7 @@ test('input validation errors do not become mock proposals', async () => {
 })
 
 test('a successful API retry returns live products rather than mock data', async () => {
- const h = harness([new Error('Temporary timeout'), { queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }] }])
+ const h = harness([new Error('Temporary timeout'), { queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const events = []
  const plan = await h.discover({ prompt, budget: 100 }, (stage, detail) => events.push(detail))
  assert.equal(h.requests.length, 3)
@@ -132,7 +132,7 @@ test('a successful API retry returns live products rather than mock data', async
 })
 
 test('OpenRouter retries exhaust before Gemini, then Gemini handles the remaining flow', async () => {
- const h = harness([new Error('429'), new Error('429'), new Error('429'), { queries: ['water cases'] }, { items: [{ id: 'p2', qty: 3, explanation: 'Provides drinking water for evacuees.' }, { id: 'p1', qty: 1 }, { id: 'p3', qty: 1 }] }])
+ const h = harness([new Error('429'), new Error('429'), new Error('429'), { queries: ['water cases'] }, { items: [{ id: 'p2', qty: 3, explanation: 'Provides drinking water for evacuees.' }, { id: 'p1', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const events = []
  const plan = await h.discover({ prompt, budget: 100 }, (stage, detail) => events.push(detail))
  assert.deepEqual(h.providers, ['openrouter', 'openrouter', 'openrouter', 'gemini', 'gemini'])
@@ -142,7 +142,7 @@ test('OpenRouter retries exhaust before Gemini, then Gemini handles the remainin
 })
 
 test('unusable OpenRouter search planning tries Gemini before mock fallback', async () => {
- const h = harness([{ queries: [] }, { queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }] }])
+ const h = harness([{ queries: [] }, { queries: ['bulk supplies'] }, { items: [{ id: 'p1', qty: 2 }, { id: 'p2', qty: 1 }, { id: 'p3', qty: 1 }, { id: 'p4', qty: 1 }] }])
  const plan = await h.discover({ prompt, budget: 100 }, () => {})
  assert.deepEqual(h.providers, ['openrouter', 'gemini', 'gemini'])
  assert.notEqual(plan.mock, true)

@@ -6,8 +6,8 @@ export function allocateBudget(
   selected: PlanItem[],
   budgetCents: number,
 ): PlanItem[] {
-  if (selected.length < 3)
-    throw new Error('Choose at least three distinct products.')
+  if (selected.length < 4)
+    throw new Error('Choose at least four distinct products.')
   const base = selected.map((item) => ({ ...item, qty: 1 }))
   if (totalsCents(base).total > budgetCents)
     throw new Error(
