@@ -2,15 +2,19 @@ import { ArrowRight } from 'lucide-react'
 import { Logo } from '@/components/brand'
 import { HeroDemo } from '@/components/home/hero-demo'
 import { PressableLink } from '@/components/kit'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function HomePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5">
         <Logo />
-        <PressableLink href="/login" variant="ghost" size="sm">
-          Sign in
-        </PressableLink>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <PressableLink href="/login" variant="ghost" size="sm">
+            Sign in
+          </PressableLink>
+        </div>
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-12 lg:grid-cols-[1.1fr_1fr] lg:py-20">

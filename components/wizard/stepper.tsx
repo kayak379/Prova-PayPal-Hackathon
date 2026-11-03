@@ -31,7 +31,7 @@ export function Stepper({
                 onClick={() => onSelect?.(i)}
                 aria-current={active ? 'step' : undefined}
                 className={cn(
-                  'relative flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:px-3',
+                  'relative flex h-8 items-center gap-1.5 rounded-full px-1.5 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:px-3',
                   active ? 'text-background' : done ? 'text-foreground' : 'text-muted-foreground',
                   clickable && 'hover:bg-background/70',
                 )}

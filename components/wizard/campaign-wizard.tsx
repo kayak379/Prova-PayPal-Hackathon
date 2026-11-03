@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { Logo } from '../brand'
+import { ThemeToggle } from '../theme-toggle'
 import { softSpring } from '../motion-provider'
 import { Stepper } from './stepper'
 import { StepGraphic } from './step-graphic'
@@ -110,20 +111,23 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5">
-          <Logo href="/dashboard" />
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-1.5 px-4 sm:gap-4 sm:px-5">
+          <Logo href="/dashboard" className="[&_span]:hidden sm:[&_span]:inline" />
           <Stepper
             step={step}
             minStep={minStep}
             onSelect={paying || discovering || paymentComplete ? undefined : go}
           />
-          <Link
-            href={exitHref}
-            aria-label="Exit"
-            className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="size-4" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <ThemeToggle />
+            <Link
+              href={exitHref}
+              aria-label="Exit"
+              className="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </Link>
+          </div>
         </div>
       </header>
 

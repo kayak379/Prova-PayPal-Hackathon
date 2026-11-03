@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Instrument_Serif } from 'next/font/google'
 import { MotionProvider } from '@/components/motion-provider'
 import { StoreProvider } from '@/lib/store'
+import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
@@ -21,17 +22,22 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light',
+  colorScheme: 'light dark',
   themeColor: '#f6f2e7',
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable} ${instrument.variable} bg-background`}>
+    <html lang="en" className={`${geist.variable} ${instrument.variable} bg-background`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t;try{t=localStorage.getItem('prova-theme')}catch(e){}document.documentElement.classList.toggle('dark',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches))})()` }} />
+      </head>
       <body className="font-sans antialiased">
-        <MotionProvider>
-          <StoreProvider>{children}</StoreProvider>
-        </MotionProvider>
+        <ThemeProvider>
+          <MotionProvider>
+            <StoreProvider>{children}</StoreProvider>
+          </MotionProvider>
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

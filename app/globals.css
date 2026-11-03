@@ -8,6 +8,15 @@
   --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-instrument), ui-serif, Georgia, serif;
   --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success-foreground: var(--success-foreground);
+  --color-graphic: var(--graphic);
+  --color-graphic-foreground: var(--graphic-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-border: var(--warning-border);
+  --color-paypal-wordmark-navy: var(--paypal-wordmark-navy);
+  --color-paypal-wordmark-blue: var(--paypal-wordmark-blue);
   --color-brand-soft: var(--brand-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -71,6 +80,15 @@
   --accent: #e3e9da;
   --accent-foreground: #214e3a;
   --brand: #2b6148;
+  --brand-foreground: #ffffff;
+  --success-foreground: #ffffff;
+  --graphic: #214e3a;
+  --graphic-foreground: #fffcf4;
+  --warning: #fffbeb;
+  --warning-foreground: #451a03;
+  --warning-border: #fcd34d;
+  --paypal-wordmark-navy: #003087;
+  --paypal-wordmark-blue: #0070e0;
   --brand-soft: #e2ead9;
   --success: #357451;
   --success-soft: #e3eddc;
@@ -92,6 +110,54 @@
   --sidebar-accent-foreground: #214e3a;
   --sidebar-border: #d8ddcc;
   --sidebar-ring: #2b6148;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #111c17;
+  --foreground: #edf3e9;
+  --card: #19281f;
+  --card-foreground: #edf3e9;
+  --popover: #1e3025;
+  --popover-foreground: #edf3e9;
+  --primary: #b0d4ad;
+  --primary-foreground: #142b1d;
+  --secondary: #293b2e;
+  --secondary-foreground: #edf3e9;
+  --muted: #25362a;
+  --muted-foreground: #b5c2af;
+  --accent: #314735;
+  --accent-foreground: #edf3e9;
+  --brand: #a5d6ad;
+  --brand-foreground: #142b1d;
+  --brand-soft: #283f2e;
+  --success: #9bd4ad;
+  --success-foreground: #142b1d;
+  --success-soft: #263c2c;
+  --destructive: #ffaaa0;
+  --border: #485c4a;
+  --input: #70866d;
+  --ring: #b0d4ad;
+  --graphic: #214e3a;
+  --graphic-foreground: #fffcf4;
+  --warning: #392e17;
+  --warning-foreground: #ffe0a3;
+  --warning-border: #997333;
+  --paypal-wordmark-navy: #a9caff;
+  --paypal-wordmark-blue: #80bdff;
+  --chart-1: #a5d6ad;
+  --chart-2: #8cbdc3;
+  --chart-3: #d2c28e;
+  --chart-4: #c0a9d6;
+  --chart-5: #edf3e9;
+  --sidebar: #19281f;
+  --sidebar-foreground: #edf3e9;
+  --sidebar-primary: #b0d4ad;
+  --sidebar-primary-foreground: #142b1d;
+  --sidebar-accent: #314735;
+  --sidebar-accent-foreground: #edf3e9;
+  --sidebar-border: #485c4a;
+  --sidebar-ring: #b0d4ad;
 }
 
 @layer base {

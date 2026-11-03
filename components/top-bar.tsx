@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Logo } from './brand'
 import { SettingsDialog } from './settings-dialog'
 import { useStore } from '@/lib/store'
+import { ThemeToggle } from './theme-toggle'
 
 export function TopBar({ children }: { children?: React.ReactNode }) {
   const { settings } = useStore()
@@ -17,6 +18,7 @@ export function TopBar({ children }: { children?: React.ReactNode }) {
         <Logo href="/dashboard" />
         {children}
         <div className="flex items-center gap-1.5">
+          <ThemeToggle />
           <motion.span
             key={settings.orgName}
             initial={{ opacity: 0, y: 4 }}
