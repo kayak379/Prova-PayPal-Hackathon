@@ -137,7 +137,7 @@ export function StepGraphic({
                 {[0.9, 0.7, 0.8, 0.55, 0.75].map((w, i) => (
                   <motion.span
                     key={i}
-                    className="h-2 rounded-full bg-white/25"
+                    className="h-2 rounded-full bg-[#214e3a]/45"
                     initial={{ width: 0 }}
                     animate={{ width: `${w * 100}%` }}
                     transition={{ delay: 0.25 + i * 0.07, ...softSpring }}
@@ -145,7 +145,7 @@ export function StepGraphic({
                 ))}
                 <motion.span
                   layoutId="payment-card"
-                  className="mt-2 h-5 w-14 self-end rounded-md bg-brand"
+                  className="mt-2 h-5 w-14 self-end rounded-md bg-[#214e3a]"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.7, ...spring }}
