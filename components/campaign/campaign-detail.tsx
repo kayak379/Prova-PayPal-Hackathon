@@ -86,7 +86,7 @@ export function CampaignDetail({ id }: { id: string }) {
           >
             <motion.span
               initial={false}
-              animate={{ rotate: reducedMotion ? 0 : settingsOpen ? 180 : 0 }}
+              animate={{ rotate: reducedMotion ? 0 : settingsOpen ? -180 : 0 }}
               transition={{ duration: 0.45, ease: 'easeInOut' }}
               className="inline-flex"
             >
