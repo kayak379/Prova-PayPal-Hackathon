@@ -1,3 +1,4 @@
+import { allocateBudget } from './budget-allocation'
 import { parseSelection, selectionQuantity, selectionReference } from './product-selection'
 import { mockPlan } from './mock-plan'
 import { retryAI } from './ai-retry'
@@ -81,7 +82,7 @@ async function discoverLive(body: DiscoveryInput, progress: (stage: number, deta
  }
  body = { prompt: body.prompt, budget: body.budget, feedback: body.feedback?.slice(0, 4000), currentPlan: body.currentPlan ? { ...body.currentPlan, snapshot: undefined, items: body.currentPlan.items?.map(({ imageUrl, productUrl, ...item }) => item) } : undefined }
  progress(0, 'Identifying priority supplies')
- const needs = await model('Plan emergency supplies for NGOs. Infer needs from disaster, population and duration. State assumptions. Return {queries: string[], reasoning: string[]}. Generate 1 to 6 precise searches for bulk packs from wholesalers, industrial suppliers, or Lowes/Home Depot. Prefer wholesale, bulk and case quantities. Avoid department stores and fashion retailers. For revisions, search ONLY for additions or replacements explicitly requested in feedback; return queries: [] for quantity changes or removals. Preserve all other items.', body)
+ const needs = await model('Plan emergency supplies for NGOs. Infer needs from disaster, population and duration. State assumptions. Return {queries: string[], reasoning: string[]}. Generate 3 to 6 precise searches covering at least three useful distinct supply types for bulk packs from wholesalers, industrial suppliers, or Lowes/Home Depot. Prefer wholesale, bulk and case quantities. Avoid department stores and fashion retailers. For revisions, search ONLY for additions or replacements explicitly requested in feedback; return queries: [] for quantity changes or removals. Preserve all other items.', body)
  if (!Array.isArray(needs.queries) || (!revision && !needs.queries.length)) throw new AIUnavailable('The AI returned no usable search queries.')
  const queries: string[] = needs.queries.filter((q: unknown) => typeof q === 'string' && q.length > 0).slice(0, 6)
  progress(1, `Searching Channel3 for ${queries.length} supply categories`)
@@ -103,8 +104,8 @@ async function discoverLive(body: DiscoveryInput, progress: (stage: number, deta
  progress(2, `Comparing ${unique.length} products and allocating the budget`)
  const byReference = new Map(unique.map((product, index) => [`p${index + 1}`, product]))
  const referenceFor = (id: string) => [...byReference].find(([, product]) => product.id === id)![0]
- const instruction = 'Select emergency products ONLY from candidate IDs, copied exactly. Maximize useful coverage by need priority; avoid redundant products. Calculate quantities to cover the stated population and duration, using pack sizes from titles. Do not default every quantity to one. If full coverage is unaffordable, allocate toward the highest priority unmet needs. Shipping is 5% and tax 8% of merchandise. Total must fit budget. Quantities must be positive integers. Omit unwanted products entirely. Do not claim bulk stock or delivery guarantees. Prefer wholesalers and industrial/bulk suppliers including Lowes, Home Depot, Grainger, Uline and Zoro over consumer retailers when suitable offers exist. Return {items: [{id: string, qty: number, explanation: string}], reasoning: string[]}. Each explanation must be exactly one concise sentence, at most 22 words, explaining how that product helps this emergency without inventing coverage, certifications or supplier names not in its candidate data. Explain tradeoffs and unmet needs briefly without repeating quantities or totals.'
- const input = { ...body, currentPlan: body.currentPlan ? { ...body.currentPlan, items: body.currentPlan.items.map(item => ({ ...item, id: referenceFor(item.id) })) } : undefined, needs, candidates: [...byReference].map(([id, { imageUrl, productUrl, ...item }]) => ({ ...item, id })) }
+ const instruction = 'Select emergency products ONLY from candidate IDs, copied exactly. Select at least three distinct useful products. Maximize useful coverage by need priority; avoid redundant products. Aim to use 98–100% of the available budget including shipping and tax, without ever exceeding it. Do not leave a discretionary reserve; increase useful quantities instead. Treat quantities as relative priorities for final code-based budget allocation. Calculate quantities to cover the stated population and duration, using pack sizes from titles. Do not default every quantity to one. If full coverage is unaffordable, allocate toward the highest priority unmet needs. Shipping is 5% and tax 8% of merchandise. Total must fit budget. Quantities must be positive integers. Omit unwanted products entirely. Do not claim bulk stock or delivery guarantees. Prefer wholesalers and industrial/bulk suppliers including Lowes, Home Depot, Grainger, Uline and Zoro over consumer retailers when suitable offers exist. Return {items: [{id: string, qty: number, explanation: string}], reasoning: string[]}. Each explanation must be exactly one concise sentence, at most 22 words, explaining how that product helps this emergency without inventing coverage, certifications or supplier names not in its candidate data. Explain tradeoffs and unmet needs briefly without repeating quantities or totals.'
+ const input = { merchandiseBudgetCents: Math.floor(Math.round(body.budget * 100) / 1.13), ...body, currentPlan: body.currentPlan ? { ...body.currentPlan, items: body.currentPlan.items.map(item => ({ ...item, id: referenceFor(item.id) })) } : undefined, needs, candidates: [...byReference].map(([id, { imageUrl, productUrl, ...item }]) => ({ ...item, id })) }
  let items: PlanItem[]
  if (revision) {
   const changes = await model('Edit ONLY the products explicitly targeted by feedback. Return {edits: [{action: "add" | "update" | "remove", id: string, qty?: number, explanation?: string}]}. Use exact candidate IDs. Never return unchanged products. Never remove or rebalance unrelated products. For a replacement remove its old ID and add its new ID. Explanations must be exactly one concise sentence of at most 22 words per product. An update must give the final positive integer quantity.', { ...input, currentPlan: { items: preserved.map(item => ({ ...item, id: referenceFor(item.id) })) }, feedback: body.feedback })
@@ -125,28 +126,28 @@ async function discoverLive(body: DiscoveryInput, progress: (stage: number, deta
   items = [...updated.values()]
   if (totalsCents(items).total > Math.round(body.budget * 100)) throw new Error('That change exceeds the budget; reduce the requested quantity or remove another item. Your existing proposal is unchanged.')
  } else {
+ const cheapest = unique.slice().sort((a, b) => a.unitPriceCents! - b.unitPriceCents!).slice(0, 3)
+ if (cheapest.length < 3 || totalsCents(cheapest.map(p => ({ ...p, qty: 1 }))).total > Math.round(body.budget * 100)) throw new Error('At least three products are required, but available products do not fit this budget. Increase the budget or try a broader supplies request.')
+ const validateSelection = (response: unknown) => {
+  const selected = parseSelection(response, new Set(byReference.keys()))
+  if (selected.length < 3) throw new Error('Select at least three distinct useful candidate products.')
+  if (totalsCents(selected.map(row => ({ ...byReference.get(row.id)!, qty: 1 }))).total > Math.round(body.budget * 100)) throw new Error('Select cheaper products: one of each chosen product must fit the budget including shipping and tax.')
+  return selected
+ }
  let response = await model(instruction, input)
  let selections: ReturnType<typeof parseSelection>
- try { selections = parseSelection(response, new Set(byReference.keys())) }
+ try { selections = validateSelection(response) }
  catch (error) {
   progress(2, 'Correcting product references and quantities')
   response = await model(instruction + ' Correct the previous response using the validation feedback; return the full corrected items array.', { ...input, previousResponse: response, validationError: error instanceof Error ? error.message : 'Invalid response' })
-  try { selections = parseSelection(response, new Set(byReference.keys())) }
+  try { selections = validateSelection(response) }
   catch { throw new AIUnavailable('The model could not match its choices to available products.') }
  }
  items = selections.map(selected => ({ ...byReference.get(selected.id)!, qty: selected.qty, explanation: sentence(selected.explanation) }))
 
  }
  const budgetCents = Math.round(body.budget * 100)
- const adjusted = totalsCents(items).total > budgetCents
- while (items.length && totalsCents(items).total > budgetCents) {
-  const factor = Math.min(.99, budgetCents / totalsCents(items).total)
-  const before = items.reduce((sum, p) => sum + p.qty, 0)
-  for (const p of items) p.qty = Math.max(1, Math.floor(p.qty * factor))
-  if (items.reduce((sum, p) => sum + p.qty, 0) === before) items.pop()
-  for (let i = items.length - 1; i >= 0; i--) if (items[i].qty < 1) items.splice(i, 1)
- }
- if (!items.length) throw new Error('No selected supplies fit this budget. Increase the budget or narrow the request.')
+ if (!revision) items = allocateBudget(items, budgetCents)
  progress(3, 'Validating prices and preparing your proposal')
  const reasoning = items.map(item => `${item.name}: ${sentence(item.explanation)}`)
 
