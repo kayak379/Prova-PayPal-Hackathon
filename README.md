@@ -1,64 +1,115 @@
-# Prova hackathon MVP
+# Prova system architecture
 
-## Demo flow
+Prova turns a disaster relief request into a priced purchasing proposal, a verified PayPal Sandbox purchase, and a campaign finance record. Two server-side agent workflows interpret requests and prepare actions. Catalog data supplies product and price facts, application code enforces budget and approval rules, and PayPal supplies payment status.
 
-1. Build a proposal, then request a specific revision such as “halve the water quantity; keep everything else.” Review the item changes, unchanged item count, and exact before/after totals. Revision failures preserve the request for retry, and checkout is disabled while revising.
-2. Complete PayPal sandbox checkout. The verified receipt shows the approved amount, completed capture, order/capture references, and remaining campaign budget. Fulfillment is simulated. The verified receipt is saved before its recovery ticket is removed.
-3. Choose **Manage payment & refunds** to open Finance. Ask the Finance assistant to prepare a refund for a campaign purchase, then send your message. PayPal revalidates the refundable amount. Confirm the action card to submit the sandbox refund, then inspect its returned status, refund/capture references, net spending, and remaining budget. Pending refunds do not restore budget; use **Refresh refund status** to recheck. Failed requests retain the same pending operation for retry.
+```mermaid
+flowchart LR
+    subgraph Browser["Browser · React"]
+        direction TB
+        Request["Campaign request<br/>and proposal review"]
+        Approval["Buyer approval<br/>and finance confirmation"]
+        Workspace[("Campaign workspace<br/>localStorage")]
+    end
 
-Run `node --test tests/checkout.test.cjs tests/finance.test.cjs tests/discovery.test.cjs tests/product-selection.test.mjs tests/request-attachment.test.cjs` and `pnpm exec tsc --noEmit` to verify the demo flows without moving money.
+    subgraph Server["Next.js · server routes"]
+        direction TB
+        Discovery["Discovery agent<br/>plan → search → select → validate"]
+        Assistant["Finance assistant<br/>call tools → observe → prepare"]
+        Payments["Checkout and finance services<br/>validate → execute → verify"]
+    end
 
-Run `pnpm install`, copy `.env.example` to `.env.local`, fill in the API credentials, then run `pnpm dev`. Open http://localhost:3000.
+    subgraph Providers["External services"]
+        direction TB
+        Models["OpenRouter → Gemini<br/>structured output and function calls"]
+        Catalog["Channel3<br/>product offers"]
+        PayPal["PayPal Sandbox<br/>Checkout · Vault · Invoicing<br/>Refunds · Transaction Search"]
+    end
 
-Create a campaign, describe the emergency, build a proposal, adjust quantities or request a revision, then approve the proposal and continue to PayPal sandbox. Sign in with a **personal sandbox buyer account**, distinct from the sandbox business merchant configured in `.env.local`. After approval, the app verifies capture and records a receipt. If interrupted, reopen the campaign wizard and verify or resume the pending checkout.
+    Request -->|"request, budget, feedback"| Discovery
+    Discovery -->|"progress and signed proposal"| Request
+    Discovery <-->|"plans and selections"| Models
+    Discovery <-->|"queries and offers"| Catalog
+    Request --- Workspace
+    Approval --- Workspace
+    Approval <-->|"questions and action cards"| Assistant
+    Assistant <-->|"native tool calls and results"| Models
+    Assistant -->|"status and preparation"| Payments
+    Approval -->|"approved checkout or action token"| Payments
+    Payments <-->|"Toolkit and OAuth REST"| PayPal
+    Approval <-->|"Web SDK v6 payer consent"| PayPal
+    Payments -->|"verified receipts and finance records"| Approval
 
-Campaigns, requests, proposals, receipts, folders and organization settings are saved in browser localStorage. No database or real authentication is used. Keep the same browser and hostname throughout checkout. Clearing browser storage removes this workspace.
+    classDef browser fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e,stroke-width:1.5px
+    classDef agent fill:#ede9fe,stroke:#6d28d9,color:#3b0764,stroke-width:1.5px
+    classDef service fill:#dcfce7,stroke:#15803d,color:#14532d,stroke-width:1.5px
+    classDef payment fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:2px
+    class Request,Approval,Workspace browser
+    class Discovery,Assistant,Models agent
+    class Catalog service
+    class Payments,PayPal payment
+```
 
-## Integrations
+## Supply discovery agent
 
-- OpenRouter defaults to `nvidia/nemotron-3.5-super-vl:free`; set `OPENROUTER_MODEL` to change it. Two model calls identify needs and select products. An invalid selection gets one repair attempt.
-- Channel3 product search uses up to six queries with at most three concurrent searches. Only USD offers with known prices are selected. Stock for bulk quantities and delivery dates are not verified.
-- PayPal Agent Toolkit creates, retrieves and captures one sandbox order. All products are paid to the configured test merchant. No retailer orders are placed and no goods ship.
-- Shipping is estimated at 5% and tax at 8%. The sandbox PayPal order includes estimated tax as a separate line to avoid per-unit tax rounding differences in the toolkit.
-- API keys remain on the server. Signed price snapshots expire after 24 hours. Payment tickets bind the cart, campaign and amount to a PayPal order. This is a local hackathon demo, not a production financial ledger; browser campaign budgets are not independently durable or authoritative across devices.
+The [discovery agent](lib/server/discovery.ts) runs a server-directed workflow behind `POST /api/discovery`. The route streams newline-delimited JSON so the wizard can show progress, retries and the final proposal as they arrive. The same agent handles initial proposals and revisions. For a new proposal it asks the model to plan searches and rank product choices. For a revision it asks the model for targeted edits, while server code owns catalog access, validation and budget enforcement.
 
-## API
+1. **Plan and retrieve.** The model interprets the disaster, population and duration and generates up to six search queries. The server searches Channel3 in batches of three, filters to eligible priced USD offers, and ranks preferred suppliers ahead of other eligible offers. Bulk availability and delivery estimates remain unverified.
+2. **Ground the selection.** The server gives the model short references to catalog candidates. The model selects products and proposes relative quantities and explanations. The server maps references back to catalog records, rejects invalid selections, and gives the model one repair attempt with the validation error and previous response.
+3. **Allocate in code.** The [budget allocator](lib/server/budget-allocation.ts) scales quantities and fills spare capacity with whole units of selected products while respecting the ceiling in integer cents, including estimated 5% shipping and 8% tax. New live proposals require at least four distinct products. The server signs the price snapshot with the budget and catalog records for checkout and expires it after 24 hours.
+4. **Revise selectively.** On revision, the server verifies the prior snapshot and applies explicit add, update or remove operations. Unrelated products retain their quantities and the resulting proposal must still fit the budget.
 
-- `POST /api/discovery`: `{ prompt, budget, feedback?, currentPlan? }`; returns newline-delimited JSON stage events followed by `{ plan }` or `{ error }`.
-- `POST /api/checkout/create`: `{ campaignId, snapshot, items: [{ id, qty }] }`; returns a sandbox approval URL, order ID and signed payment ticket.
-- `POST /api/checkout/capture`: `{ orderId, ticket }`; verifies or captures the approved order and returns `{ campaignId, receipt }`. Repeated verification returns the same receipt; the browser deduplicates by PayPal order ID.
+Discovery starts with OpenRouter and retries failed requests before switching to Gemini. A run stays on Gemini after switching. If both providers fail to produce usable AI output, discovery can return a labeled mock proposal whose provenance follows it into checkout and receipts. Failed AI revisions retain the prior proposal and disclose that the requested edits were unapplied.
 
-New product prices and payment totals use integer cents internally; dollar fields are retained for the existing presentation components.
+## PayPal Developer Platform
 
-Check types with `pnpm exec tsc --noEmit`. Build with `pnpm build` (or `pnpm exec next build --webpack` if the local Turbopack CSS worker fails).
+Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for server-side operations, and direct REST calls for Vault and saved-wallet orders. All three run against PayPal Sandbox.
 
-Checkout uses the PayPal sandbox v6 SDK in modal mode. Settings saves a PayPal wallet through Vault after one-time payer consent. Buyer passwords are not stored or sent by the app. Existing saved proposals retain their previous suppliers until rebuilt. Revisions apply explicit product edits and preserve unrelated items; over-budget edits are rejected without modifying the original proposal.
+### Sandbox OAuth and the PayPal Agent Toolkit
 
-### Saved PayPal wallet
+The REST adapter exchanges the server-side client ID and secret at `POST /v1/oauth2/token` using the client credentials grant. It sends the resulting bearer token to the Sandbox API and attaches a `PayPal-Request-Id` to POST requests. The Toolkit adapter uses `@paypal/agent-toolkit/openai` in Sandbox mode and dispatches a fixed allowlist of order, invoice, refund and reporting tools. Prova’s finance assistant calls narrower application functions that keep payment writes behind user confirmation. [PayPal adapter](lib/server/paypal.ts)
 
-Organization settings → Save PayPal uses the Payment Method Tokens v3 API: create a setup token, obtain payer consent through the in-page PayPal Save session, then exchange it for a payment token. The app stores the wallet reference in an encrypted HttpOnly cookie for 30 days; it does not store the buyer password or expose the vault ID to JavaScript. Vault must be enabled for the sandbox app. Change saved PayPal connects another account; Remove saved PayPal revokes its payment token.
+### PayPal Web SDK v6 and Orders v2
 
-After the user approves a proposal, checkout uses the saved wallet through the Orders API with a persisted idempotency key, then verifies the captured amount. Standard unsaved-wallet purchases still use PayPal Agent Toolkit. PayPal may request additional payer action; the modal handles that when required. Wallet saving itself takes no payment.
+The browser initializes the Sandbox SDK with the public client ID and the `paypal-payments` component. It checks USD payment eligibility with `findEligibleMethods` and opens a modal with `createPayPalOneTimePaymentSession`. The checkout flow also retains a Sandbox approval link for redirect and recovery. [Browser SDK](lib/paypal-client.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
 
-If the AI API fails (including rate limits, timeouts, or unusable selection output), discovery returns a clearly labeled mock proposal with sample suppliers and prices. The mock flag is signed into checkout data and carried into sandbox receipts and order history. Failed AI revisions preserve the current proposal and explicitly state that requested changes were not applied. Input validation and supplier API errors still surface as errors.
+The server reconstructs the cart from signed catalog prices, checks the budget, and binds the order ID, campaign, approved items and total to a signed payment ticket. For a one-time purchase it uses the Toolkit’s `create_order`. With a saved wallet it sends `POST /v2/checkout/orders` with the PayPal `vault_id`, the charge breakdown and the checkout attempt’s request ID when available. PayPal can require additional payer approval on that path. [Checkout service](lib/server/checkout.ts)
 
-Each failed OpenRouter request now gets up to 3 total attempts (initial request plus 2 retries), waiting 1 second and then 2 seconds. Progress reports the retry attempt. Mock fallback is used only after those attempts fail; a successful retry continues with live discovery. Product-selection repair remains a separate step.
+After approval, `get_order` retrieves the order and `pay_order` captures it when it is approved and still awaiting capture. The server retrieves the order again after the capture attempt, including after a timeout. It issues a receipt only when the order and capture are completed and the capture matches the exact approved USD amount. The browser retains the recovery ticket until the verified receipt is saved. [Checkout service](lib/server/checkout.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
 
-AI provider order: OpenRouter (up to 3 attempts) -> Gemini (up to 3 attempts) -> labeled mock data. Gemini uses the server-side GEMINI_API_KEY and GEMINI_MODEL (default gemini-3.5-flash). After switching, the rest of that discovery/revision run stays on Gemini. Google currently routes gemini-3.5-flash to gemini-3.6-flash; the configured request ID remains gemini-3.5-flash.
+### Vault API and Payment Method Tokens v3
 
-## Campaign funding, refunds and finance assistant
+1. **Create a setup token.** Prova calls `POST /v3/vault/setup-tokens` for a PayPal wallet and binds the setup ID to an expiring signed ticket.
+2. **Obtain and verify consent.** The browser opens `createPayPalSavePaymentSession` in a modal. The server calls `GET /v3/vault/setup-tokens/{id}` and requires an approved setup before proceeding.
+3. **Exchange the setup token.** Prova calls `POST /v3/vault/payment-tokens` with the approved setup token and a request ID derived from its ID. It encrypts the resulting wallet reference in an HttpOnly cookie and can persist an encrypted shared Sandbox default. Checkout uses the token on a later purchase after proposal approval.
+4. **Revoke a saved wallet.** Removing the account calls `DELETE /v3/vault/payment-tokens/{id}` and clears the local wallet references.
 
-Campaign details now has **Funding** and **Finance** tabs. Existing records need no migration; new finance collections default to empty arrays. Everything remains in the shared browser workspace and PayPal sandbox.
+[Vault service](lib/server/vault.ts) · [Organization settings](components/settings-dialog.tsx) · [PayPal consent return](app/paypal/save/route.ts)
 
-- Funding: choose a saved proposal or purchase, select item quantities with estimated shipping and tax, enter a sponsor name and optional email, review, and confirm. This creates a draft invoice, persists it, publishes it, then retrieves its payment link and QR. Email is off by default. Select **Email invoice to sponsor through PayPal** to require a sponsor email and show that recipient in the confirmation. Publication requests the sponsor notification through PayPal (`send_to_recipient: true`); merchant notifications stay disabled. Refreshing an already published invoice does not resend email. The app records a notification request, not confirmed email delivery; sandbox behavior may differ from real email delivery. QR/publication errors can be retried on the same invoice. Funding includes selected merchandise plus estimated 5% shipping and 8% tax, and does not increase the purchasing budget. Refresh status to record actual received funding; unpaid invoices count as zero.
-- Orders: expand a purchase to prepare a full remaining or exact USD partial refund. Confirm the amount to refund Prova’s sandbox merchant payment. This does not cancel a retailer order. Only completed refunds reduce net spending and restore the campaign’s remaining budget. Pending/failed refunds do not.
-- Finance: verify orders, refunds and invoices against PayPal. Supplementary transaction reporting can lag or be unavailable and is not used to declare a missing payment. The overview and export include these finance records.
-- Assistant: ask payment questions or request an invoice/refund preparation. Native OpenRouter/Gemini function calling chooses campaign-scoped read tools and preparation tools. The assistant can prepare an emailed invoice when explicitly requested with a sponsor email. Only confirmation cards can execute writes. Each message is limited to four model rounds/eight tool executions. Provider failure never fabricates financial success; guided controls remain available.
+### Invoicing, refunds and transaction reporting
 
-`POST /api/finance` supports `prepare`, `confirm`, `invoice` (optional publish), `refund` status, and `reconcile`, with the browser campaign context. `POST /api/finance/chat` accepts campaign, text and message history. Action tokens bind campaign, source, amount and operation ID and expire after 15 minutes. Pending operation IDs persist before writes; PayPal request IDs provide idempotency. The server revalidates source prices/captures and signs invoice/refund references. There is no production account isolation or durable server ledger in this demo.
+| PayPal capability | Toolkit operations | How Prova uses it |
+| --- | --- | --- |
+| Invoicing | `create_invoice`, `send_invoice`, `get_invoice`, `generate_invoice_qr_code` | Creates a sponsor invoice for selected merchandise and estimated charges, persists the draft reference, and then publishes it. The server retrieves the payment link and generates a QR code. Sponsor email is opt-in and merchant notifications are suppressed. Refreshing a published invoice can recover its status or QR code without resending email. Verified receipts from sponsors are tracked separately from the purchasing budget. |
+| Payments and refunds | `create_refund`, `get_refund` | Revalidates the original capture and remaining refundable amount, then submits an exact partial refund or the full remaining amount after confirmation. Retrieves refund details to verify amount and status. Only completed refunds reduce campaign spending. |
+| Transaction Search | `list_transactions` | Supplements reconciliation of purchases, refunds and invoices. Object status comes from the corresponding PayPal order, refund or invoice lookup, so a delayed or unavailable reporting entry does not determine payment status. |
 
-Verification uses `node --test tests/finance.test.cjs tests/discovery.test.cjs tests/product-selection.test.mjs` and `pnpm exec tsc --noEmit`. A $2 sandbox invoice was published with a working QR/link and no email; a $1 sandbox partial refund against the designated demo purchase completed and was recovered without a duplicate refund. Sponsor payment verification requires paying the invoice with a sandbox buyer account distinct from the merchant.
+[Finance service](lib/server/finance.ts) · [Invoice QR handling](lib/server/invoice-qr.ts)
 
-Invoice email regression tests cover required recipients, signed notification preferences, recipient mismatch rejection, default notification suppression, and no duplicate send after QR failure or refresh. Email-enabled publication is tested with mocked PayPal responses; no test emails were sent.
+## Finance assistant and approval boundary
 
-New discovery proposals select at least four distinct products and aim to use the full budget, including estimated 5% shipping and 8% tax. The server preserves the AI’s relative quantity priorities, scales quantities, and fills remaining capacity with additional selected units without exceeding the budget. Prices, whole-pack sizes, and quantity limits can leave a remainder. If four priced products cannot fit, discovery asks for a larger budget or broader request. Clearly labeled mock proposals follow the same allocation rule. Revisions still apply only requested edits and may explicitly remove products without automatically refilling the budget.
+The finance assistant is a conversational agent behind `POST /api/finance/chat`. The server gives it campaign context and exposes six functions through OpenRouter or Gemini’s native function-calling format. Unlike discovery, where server code determines the sequence of model and search calls, the finance model chooses which permitted functions to call and can use their results to decide what to do next. Each message is capped at four model rounds and eight tool executions. [Finance assistant](lib/server/finance-agent.ts)
+
+| Function | What the server provides |
+| --- | --- |
+| `order_status` | Verified order and capture details for a campaign purchase. |
+| `invoice_status` | PayPal status for a campaign funding invoice. |
+| `refund_status` | PayPal status for a campaign purchase refund. |
+| `reconcile_campaign` | Checks the campaign’s payment, invoice and refund references against PayPal. |
+| `prepare_invoice` | Validates the funding source and selected items, then prepares a review card with the amount and any requested sponsor notification. |
+| `prepare_refund` | Checks the original capture and available refundable amount, then prepares a review card for the requested refund. |
+
+Preparation produces a signed action token that binds the campaign, source, amount, operation ID and applicable invoice preferences for 15 minutes. The user confirms the card through a separate request. The browser persists the pending operation before confirmation, and the server revalidates the inputs and reuses PayPal request IDs so retries can recover an existing invoice or refund. Guided finance controls use the same confirmation path and remain available during a model outage. [Finance service](lib/server/finance.ts)
+
+## Data ownership and deployment boundary
+
+The [React workspace store](lib/store.tsx) persists campaigns, proposals, receipts and finance records in browser localStorage. Next.js server routes hold provider credentials and sign price snapshots, payment tickets and finance references. PayPal Sandbox is authoritative for captures, invoice payments and refunds. The browser budget is scoped to the local workspace, and the demo has no durable server ledger or production account isolation. Sandbox purchases pay the configured test merchant, and retailer fulfillment is simulated.
