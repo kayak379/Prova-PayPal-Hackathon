@@ -2,61 +2,72 @@
 
 import { motion, useReducedMotion } from 'motion/react'
 
+const REST = 'M10 20 C20 20 38 20 50 20 L50 41 C38 41 20 41 10 41 Z'
+const LIFT = 'M10 20 C20 22 38 13 50 17 L50 38 C38 34 20 43 10 41 Z'
+const DIP = 'M10 20 C20 19 38 24 50 22 L50 43 C38 45 20 40 10 41 Z'
+
 export function FinanceMoney({ active }: { active: boolean }) {
   const reduced = useReducedMotion()
+  const flutter = {
+    duration: active ? 2.6 : 4,
+    times: [0, 0.34, 0.52, 0.7, 1],
+    ease: 'easeInOut' as const,
+    repeat: reduced ? 0 : Infinity,
+  }
+
   return (
     <svg
-      viewBox="0 0 56 56"
+      viewBox="0 0 64 64"
       className="size-14 shrink-0 text-brand"
       aria-hidden="true"
     >
-      <circle cx="28" cy="28" r="25" fill="var(--brand-soft)" />
-      {[40, 35, 30].map((y, i) => (
-        <motion.g
-          key={y}
-          initial={reduced ? false : { opacity: 0, y: -5 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: i * 0.12, duration: 0.4 }}
-        >
-          <rect
-            x="13"
-            y={y - 4}
-            width="24"
-            height="7"
-            rx="3.5"
+      <circle cx="32" cy="32" r="29" fill="var(--brand-soft)" />
+      {[2, 1].map((layer) => (
+        <g key={layer} transform={`translate(${layer * 1.5} ${layer * 4})`}>
+          <motion.path
+            d={REST}
+            initial={false}
+            animate={{ d: reduced ? REST : [REST, LIFT, DIP, REST, REST] }}
+            transition={{
+              ...flutter,
+              times: [0, 0.34 + layer * 0.035, 0.52 + layer * 0.035, 0.7 + layer * 0.035, 1],
+            }}
             fill="var(--card)"
             stroke="currentColor"
-            strokeOpacity=".5"
+            strokeOpacity={layer === 2 ? 0.55 : 0.8}
+            strokeLinejoin="round"
           />
-        </motion.g>
+        </g>
       ))}
-      <g>
-        <circle cx="33" cy="23" r="12" fill="var(--primary)" />
+      <motion.path
+        d={REST}
+        initial={false}
+        animate={{ d: reduced ? REST : [REST, LIFT, DIP, REST, REST] }}
+        transition={flutter}
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <motion.g
+        initial={false}
+        animate={{ y: reduced ? 0 : [0, -2, 1.5, 0, 0] }}
+        transition={flutter}
+        fill="none"
+        stroke="var(--brand-foreground)"
+        strokeLinecap="round"
+      >
+        <ellipse cx="30" cy="30.5" rx="7" ry="8" strokeOpacity=".45" />
         <path
-          d="M36 18.5 H31.5 A2.5 2.5 0 0 0 31.5 23.5 H34 A2.5 2.5 0 0 1 34 28.5 H29.5 M33 16 V31"
-          fill="none"
-          stroke="var(--primary-foreground)"
-          strokeWidth="1.6"
-          strokeLinecap="round"
+          d="M33 27 H29 A1.75 1.75 0 0 0 29 30.5 H31 A1.75 1.75 0 0 1 31 34 H27 M30 25 V36"
+          strokeWidth="1.4"
         />
-        {!reduced && (
-          <motion.path
-            d="M39 14 V20 M36 17 H42"
-            stroke="var(--primary-foreground)"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.9, 0] }}
-            transition={{
-              delay: 2,
-              duration: 0.9,
-              repeat: Infinity,
-              repeatDelay: active ? 3 : 6,
-            }}
-          />
-        )}
-      </g>
+        <path
+          d="M15 28 V25 H19 M41 36 H45 V33"
+          strokeOpacity=".55"
+          strokeWidth="1.2"
+        />
+      </motion.g>
     </svg>
   )
 }
