@@ -131,6 +131,6 @@ The finance assistant is a conversational agent behind `POST /api/finance/chat`.
 
 Preparation produces a signed action token that binds the campaign, source, amount, operation ID and applicable invoice preferences for 15 minutes. The user confirms the card through a separate request. The browser persists the pending operation before confirmation, and the server revalidates the inputs and reuses PayPal request IDs so retries can recover an existing invoice or refund. Guided finance controls use the same confirmation path and remain available during a model outage. [Finance service](lib/server/finance.ts)
 
-## Data ownership and deployment boundary
+## License
 
-The [React workspace store](lib/store.tsx) persists campaigns, proposals, receipts and finance records in browser localStorage. Next.js server routes hold provider credentials and sign price snapshots, payment tickets and finance references. PayPal Sandbox is authoritative for captures, invoice payments and refunds. The browser budget is scoped to the local workspace, and the demo has no durable server ledger or production account isolation. Sandbox purchases pay the configured test merchant, and retailer fulfillment is simulated.
+This project is licensed under the MIT License - see the LICENSE file in the repository for more details.
