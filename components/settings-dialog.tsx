@@ -23,36 +23,74 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
   const [wallet, setWallet] = useState<{ saved: boolean; email?: string }>({ saved: false })
   const [walletBusy, setWalletBusy] = useState(false)
   const [walletError, setWalletError] = useState('')
-  useEffect(() => { fetch('/api/paypal/vault').then(r => r.json()).then(setWallet).catch(() => setWalletError('Could not load saved PayPal account.')) }, [])
+
+  useEffect(() => {
+    fetch('/api/paypal/vault')
+      .then(r => r.json())
+      .then(setWallet)
+      .catch(() => setWalletError('Could not load saved PayPal account.'))
+  }, [])
+
   async function vaultRequest(action: string, ticket?: string) {
-    const response = await fetch('/api/paypal/vault', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ticket }) })
+    const response = await fetch('/api/paypal/vault', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ticket }),
+    })
     const data = await response.json()
     if (!response.ok) throw new Error(data.error || 'Could not save PayPal')
     return data
   }
+
   async function savePayPal() {
-    setWalletBusy(true); setWalletError('')
+    setWalletBusy(true)
+    setWalletError('')
     try {
       const sdk = await paypalVaultSDK()
       const setup = await vaultRequest('setup')
       const session = sdk.createPayPalSavePaymentSession({
         onApprove: async () => {
-          try { const saved = await vaultRequest('confirm', setup.ticket); setWallet(saved); setForm(f => ({ ...f, paypalEmail: saved.email })); updateSettings({ ...form, paypalEmail: saved.email }) }
-          catch (error) { setWalletError(error instanceof Error ? error.message : 'Wallet save failed') }
-          finally { setWalletBusy(false) }
+          try {
+            const saved = await vaultRequest('confirm', setup.ticket)
+            setWallet(saved)
+            setForm(f => ({ ...f, paypalEmail: saved.email }))
+            updateSettings({ ...form, paypalEmail: saved.email })
+          } catch (error) {
+            setWalletError(error instanceof Error ? error.message : 'Wallet save failed')
+          } finally {
+            setWalletBusy(false)
+          }
         },
-        onCancel: () => { setWalletBusy(false); setWalletError('Saving cancelled. Your saved account was not changed.') },
-        onError: () => { setWalletBusy(false); setWalletError('PayPal could not save this account. Check that Vault is enabled for your sandbox app.') }
+        onCancel: () => {
+          setWalletBusy(false)
+          setWalletError('Saving cancelled. Your saved account was not changed.')
+        },
+        onError: () => {
+          setWalletBusy(false)
+          setWalletError('PayPal could not save this account. Check that Vault is enabled for your sandbox app.')
+        }
       })
       await session.start({ presentationMode: 'modal' }, Promise.resolve({ vaultSetupToken: setup.vaultSetupToken }))
-    } catch (error) { setWalletError(error instanceof Error ? error.message : 'Wallet save failed'); setWalletBusy(false) }
+    } catch (error) {
+      setWalletError(error instanceof Error ? error.message : 'Wallet save failed')
+      setWalletBusy(false)
+    }
   }
+
   async function removePayPal() {
-    setWalletBusy(true); setWalletError('')
-    try { setWallet(await vaultRequest('remove')); setForm(f => ({ ...f, paypalEmail: '' })); updateSettings({ ...form, paypalEmail: '' }) }
-    catch (error) { setWalletError(error instanceof Error ? error.message : 'Could not remove PayPal') }
-    finally { setWalletBusy(false) }
+    setWalletBusy(true)
+    setWalletError('')
+    try {
+      setWallet(await vaultRequest('remove'))
+      setForm(f => ({ ...f, paypalEmail: '' }))
+      updateSettings({ ...form, paypalEmail: '' })
+    } catch (error) {
+      setWalletError(error instanceof Error ? error.message : 'Could not remove PayPal')
+    } finally {
+      setWalletBusy(false)
+    }
   }
+
   const [saved, setSaved] = useState(false)
 
   const submit = (e: React.FormEvent) => {
