@@ -170,6 +170,42 @@
 }
 
 @layer utilities {
+  .agent-step-shimmer {
+    background: linear-gradient(100deg, var(--foreground) 25%, var(--foreground) 36%, #417b54 46%, var(--brand) 50%, #417b54 54%, var(--foreground) 64%, var(--foreground) 75%);
+    background-size: 250% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark .agent-step-shimmer {
+    background-image: linear-gradient(100deg, #a5d6ad 25%, #a5d6ad 36%, #fff6dc 46%, #ffffff 50%, #fff6dc 54%, #a5d6ad 64%, #a5d6ad 75%);
+  }
+  .agent-progress-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 16%, transparent) transparent;
+    scrollbar-gutter: stable;
+  }
+  .agent-progress-scroll:hover,
+  .agent-progress-scroll:focus-within {
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 30%, transparent) transparent;
+  }
+  .agent-progress-scroll::-webkit-scrollbar { width: 3px; }
+  .agent-progress-scroll::-webkit-scrollbar-button { display: none; height: 0; }
+  .agent-progress-scroll::-webkit-scrollbar-track { background: transparent; }
+  .agent-progress-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 16%, transparent);
+    border-radius: 999px;
+  }
+  .agent-progress-scroll:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted-foreground) 30%, transparent);
+  }
+  @supports selector(::-webkit-scrollbar) {
+    .agent-progress-scroll {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+  }
   .tabular { font-variant-numeric: tabular-nums; }
   .shimmer-text {
     background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%);
@@ -188,6 +224,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .shimmer-text { animation: none; color: var(--foreground); }
+  .agent-step-shimmer { animation: none; background: none; color: var(--foreground); }
 }
 
 @keyframes ring {
