@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ArrowUp,
   CheckCircle2,
+  Check,
   ExternalLink,
   ReceiptText,
   ShieldCheck,
@@ -22,6 +23,7 @@ import { useStore } from '@/lib/store'
 import { Card, Pressable, inputClass, Label } from '../kit'
 import { FundingGraphic } from './funding-graphic'
 import { FinanceMoney } from './finance-money'
+import { PayPalWordmark } from '../brand'
 const dollars = (c: number) => usdPrecise(c / 100)
 const upsert = <T extends { id: string }>(list: T[], item: T) => [
   ...list.filter((i) => i.id !== item.id),
@@ -194,7 +196,7 @@ export function FinancePanel({
             kind,
             source,
             sponsor,
-            email,
+            email: emailInvoice ? email : '',
             emailInvoice,
             items: products
               .map((p) => ({ id: p.id, qty: selected[p.id] ?? p.qty }))
@@ -479,58 +481,97 @@ export function FinancePanel({
                 </label>
               ))}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <div>
-                <Label htmlFor="funding-sponsor">Sponsor name</Label>
-                <input
-                  id="funding-sponsor"
-                  aria-label="Sponsor name"
-                  className={inputClass}
-                  placeholder="Sponsor name"
-                  value={sponsor}
-                  onChange={(e) => {
-                    setSponsor(e.target.value)
-                    setPrepared(null)
-                  }}
-                />
-              </div>
-              <div>
-                <Label htmlFor="funding-email">Sponsor email</Label>
-                <input
-                  id="funding-email"
-                  aria-label={
-                    emailInvoice
-                      ? 'Sponsor email required'
-                      : 'Sponsor email optional'
-                  }
-                  type="email"
-                  required={emailInvoice}
-                  className={inputClass}
-                  placeholder={
-                    emailInvoice
-                      ? 'Sponsor email (required)'
-                      : 'Sponsor email (optional)'
-                  }
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    setPrepared(null)
-                  }}
-                />
-              </div>
+            <div>
+              <Label htmlFor="funding-sponsor">
+                Sponsor name{' '}
+                <span aria-hidden="true" className="text-destructive">
+                  *
+                </span>
+              </Label>
+              <input
+                id="funding-sponsor"
+                aria-label="Sponsor name"
+                required
+                className={inputClass}
+                placeholder="Sponsor name"
+                value={sponsor}
+                disabled={busy}
+                onChange={(e) => {
+                  setSponsor(e.target.value)
+                  setPrepared(null)
+                }}
+              />
             </div>
-            <label className="flex items-center gap-3 text-sm">
+            <label
+              className={`flex w-fit cursor-pointer items-center gap-2.5 py-0.5 text-sm text-muted-foreground transition-colors hover:text-foreground ${busy ? 'pointer-events-none opacity-50' : ''}`}
+            >
               <input
                 type="checkbox"
-                className="size-4 accent-brand"
+                aria-label="Email invoice to sponsor through PayPal"
+                aria-controls="funding-email-area"
+                aria-expanded={emailInvoice}
+                className="peer sr-only"
                 checked={emailInvoice}
+                disabled={busy}
                 onChange={(e) => {
                   setEmailInvoice(e.target.checked)
                   setPrepared(null)
                 }}
               />
-              Email invoice to sponsor through PayPal
+              <span
+                aria-hidden="true"
+                className={`inline-flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-card ${emailInvoice ? 'border-brand bg-brand text-brand-foreground' : 'border-input bg-card'}`}
+              >
+                <motion.span
+                  initial={false}
+                  animate={{
+                    opacity: emailInvoice ? 1 : 0,
+                    scale: emailInvoice ? 1 : 0.6,
+                  }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Check className="size-3.5" strokeWidth={2.5} />
+                </motion.span>
+              </span>
+              <span className="min-w-0 leading-relaxed">
+                Email invoice to sponsor through{' '}
+                <PayPalWordmark className="align-baseline text-[1em]" />
+              </span>
             </label>
+            <AnimatePresence initial={false}>
+              {emailInvoice && (
+                <motion.div
+                  id="funding-email-area"
+                  key="sponsor-email"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{
+                    duration: reducedMotion ? 0 : 0.25,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="overflow-hidden"
+                >
+                  <div className="pb-1">
+                    <Label htmlFor="funding-email">Sponsor email</Label>
+                    <input
+                      id="funding-email"
+                      aria-label="Sponsor email required"
+                      type="email"
+                      required={emailInvoice}
+                      disabled={busy}
+                      className={inputClass}
+                      placeholder="sponsor@example.com"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setPrepared(null)
+                      }}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <div className="border-t border-border pt-5">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm text-muted-foreground">
@@ -562,24 +603,29 @@ export function FinancePanel({
             </Pressable>
           </Card>
           <div className="flex min-w-0 flex-col gap-4">
-            <div className="flex items-end justify-between gap-3">
-              <h2 className="font-serif text-3xl tracking-tight">
-                Funding requests
-              </h2>
-              <span className="text-sm text-muted-foreground tabular">
-                {(campaign.funding || []).length} invoices
-              </span>
-            </div>
-            <Card className="flex items-center justify-between gap-4 p-5">
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Confirmed sponsor funding
-                </p>
-                <p className="mt-2 text-3xl font-medium tracking-tight tabular">
-                  {dollars(totals.funding)}
-                </p>
+            <Card className="p-5 sm:p-7">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <h2 className="font-serif text-3xl tracking-tight">
+                  Funding requests
+                </h2>
+                <span className="text-sm text-muted-foreground tabular">
+                  {(campaign.funding || []).length}{' '}
+                  {(campaign.funding || []).length === 1
+                    ? 'invoice'
+                    : 'invoices'}
+                </span>
               </div>
-              <CheckCircle2 className="size-6 text-brand" />
+              <div className="mt-5 flex items-center justify-between gap-4 border-t border-border pt-5">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Confirmed sponsor funding
+                  </p>
+                  <p className="mt-2 text-3xl font-medium tracking-tight tabular">
+                    {dollars(totals.funding)}
+                  </p>
+                </div>
+                <CheckCircle2 className="size-6 text-brand" />
+              </div>
             </Card>
             {!campaign.funding?.length && (
               <div className="rounded-2xl border border-dashed border-border p-8 text-center">
