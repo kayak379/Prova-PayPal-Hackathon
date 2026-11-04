@@ -1,6 +1,9 @@
 # Prova system architecture
 
-Prova turns a disaster relief request into a priced purchasing proposal, a verified PayPal Sandbox purchase, and a campaign finance record. Two server-side agent workflows interpret requests and prepare actions. Catalog data supplies product and price facts, application code enforces budget and approval rules, and PayPal supplies payment status.
+Prova uses AI to plan disaster relief purchases and help operators manage campaign finances. Both agents use OpenRouter and Gemini, with different roles for the model in each workflow.
+
+- **Supply discovery agent.** Given a request like “supply 200 people after a flood,” the model plans catalog searches, selects from retrieved products, and proposes quantities and reasons. The server validates the model’s structured output against Channel3 offers and calculates quantities that fit the budget. [Discovery workflow](#supply-discovery-agent)
+- **Finance assistant.** Given a request like “prepare a $20 refund for this purchase,” the model chooses which campaign tools to call, uses the returned PayPal data, and prepares an action for review. The user confirms the action before the server sends a financial write to PayPal. [Finance workflow](#finance-assistant-and-approval-boundary)
 
 ```mermaid
 flowchart LR
@@ -13,8 +16,8 @@ flowchart LR
 
     subgraph Server["Next.js · server routes"]
         direction TB
-        Discovery["Discovery agent<br/>plan → search → select → validate"]
-        Assistant["Finance assistant<br/>call tools → observe → prepare"]
+        Discovery["AI discovery agent<br/>plan → retrieve → select → validate"]
+        Assistant["AI finance assistant<br/>choose tools → read results → prepare"]
         Payments["Checkout and finance services<br/>validate → execute → verify"]
     end
 
