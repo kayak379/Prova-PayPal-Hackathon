@@ -61,6 +61,7 @@ The [discovery agent](lib/server/discovery.ts) runs a server-directed workflow b
 Discovery starts with OpenRouter and retries failed requests before switching to Gemini. A run stays on Gemini after switching. If both providers fail to produce usable AI output, discovery can return a labeled mock proposal whose provenance follows it into checkout and receipts. Failed AI revisions retain the prior proposal and disclose that the requested edits were unapplied.
 
 ## PayPal Developer Platform
+I had a lot of fun using the platform. I'd never explored PayPal's sandbox or developer features before (or fintech platforms in general), and I was impressed by how powerful they are.
 
 Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for server-side operations, and direct REST calls for Vault and saved-wallet orders. All three run against PayPal Sandbox.
 
