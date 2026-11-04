@@ -7,7 +7,7 @@ import type {
 } from '../types'
 import { priceCents, totalsCents } from '../money'
 import { sign, verify } from './common'
-import { paypal, paypalRest } from './paypal'
+import { paypal } from './paypal'
 import { invoiceQr } from './invoice-qr'
 const cents = (value: unknown) => Math.round(Number(value || 0) * 100)
 const money = (value: number) => ({

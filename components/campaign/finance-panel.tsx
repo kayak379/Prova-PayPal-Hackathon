@@ -13,7 +13,6 @@ import {
 import type {
   Campaign,
   FinanceAction,
-  FundingRequest,
   PurchaseRefund,
 } from '@/lib/types'
 import { financeTotals } from '@/lib/finance'
