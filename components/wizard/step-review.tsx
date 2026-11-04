@@ -46,21 +46,33 @@ export function StepReview({
     if (!feedback.trim() || revisionLock.current) return
     revisionLock.current = true
     onBusyChange(true)
-    setRevising(true); setError(''); setRevision(null); setRevisionProgress('Reviewing your requested changes…')
+    setRevising(true)
+    setError('')
+    setRevision(null)
+    setRevisionProgress('Reviewing your requested changes…')
     try {
       const next = await requestPlan({ prompt, budget, feedback, currentPlan: plan }, (_, detail) => setRevisionProgress(detail))
       setPlan(next)
       setRevision({ before: plan, after: next, request: feedback.trim() })
       // Preserve the request for retry when the provider retains the original plan.
       if (!next.fallbackReason) setFeedback('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Revision failed')
+    } finally {
+      revisionLock.current = false
+      setRevising(false)
+      onBusyChange(false)
     }
-    catch (e) { setError(e instanceof Error ? e.message : 'Revision failed') }
-    finally { revisionLock.current = false; setRevising(false); onBusyChange(false) }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      {plan.mock && <div role="status" className="rounded-xl border border-warning-border bg-warning p-4 text-sm text-warning-foreground"><p className="font-semibold">Mock data — AI fallback</p><p className="mt-1">{plan.fallbackReason || 'These are sample products and prices, not live supplier offers.'}</p></div>}
+      {plan.mock && (
+        <div role="status" className="rounded-xl border border-warning-border bg-warning p-4 text-sm text-warning-foreground">
+          <p className="font-semibold">Mock data — AI fallback</p>
+          <p className="mt-1">{plan.fallbackReason || 'These are sample products and prices, not live supplier offers.'}</p>
+        </div>
+      )}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {revision && revision.after === plan && <RevisionSummary before={revision.before} after={revision.after} request={revision.request} budget={budget} />}
       <div className="flex items-end justify-between gap-4">
@@ -73,78 +85,78 @@ export function StepReview({
       <div className="grid gap-6 xl:grid-cols-[1fr_250px]">
         <div className="flex min-w-0 flex-col gap-4">
           <fieldset disabled={revising} className="min-w-0">
-          <Card className="relative overflow-hidden">
-            <ul>
-              <AnimatePresence initial={false}>
-                {plan.items.map((item, i) => (
-                  <motion.li
-                    key={item.id}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04 } }}
-                    exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
-                    className="group flex items-center gap-3 border-b border-border px-4 py-3.5 last:border-0"
-                  >
-                    {item.imageUrl && <a href={item.productUrl} target="_blank" rel="noreferrer" className="shrink-0" aria-label={`View ${item.name}`}><img src={item.imageUrl} alt="" className="size-9 rounded-md object-contain" /></a>}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-pretty text-[15px] font-medium leading-snug">{item.productUrl ? <a href={item.productUrl} target="_blank" rel="noreferrer" className="hover:underline">{item.name}</a> : item.name}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {item.supplier} · {usdPrecise(item.unitPrice)} · {item.delivery}
-                      </p>
-                    </div>
-                    <div className="flex items-center rounded-full border border-border">
-                      <button
-                        onClick={() => setQty(item.id, item.qty - Math.max(1, Math.round(item.qty * 0.1)))}
-                        aria-label={`Decrease ${item.name}`}
-                        className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <Minus className="size-3" />
-                      </button>
-                      <label className="sr-only" htmlFor={`q-${item.id}`}>
-                        Quantity for {item.name}
-                      </label>
-                      <input
-                        id={`q-${item.id}`}
-                        inputMode="numeric"
-                        value={item.qty}
-                        onChange={(e) => setQty(item.id, Number(e.target.value.replace(/\D/g, '').slice(0, 6)) || 1)}
-                        className="w-12 bg-transparent text-center text-sm outline-none tabular"
-                      />
-                      <button
-                        onClick={() => setQty(item.id, item.qty + Math.max(1, Math.round(item.qty * 0.1)))}
-                        aria-label={`Increase ${item.name}`}
-                        className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <Plus className="size-3" />
-                      </button>
-                    </div>
-                    <span className="hidden w-20 text-right text-sm tabular sm:block">{usdPrecise(item.qty * item.unitPrice)}</span>
-                    <button
-                      onClick={() => remove(item.id)}
-                      aria-label={`Remove ${item.name}`}
-                      className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground opacity-60 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+            <Card className="relative overflow-hidden">
+              <ul>
+                <AnimatePresence initial={false}>
+                  {plan.items.map((item, i) => (
+                    <motion.li
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04 } }}
+                      exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
+                      className="group flex items-center gap-3 border-b border-border px-4 py-3.5 last:border-0"
                     >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </motion.li>
-                ))}
-              </AnimatePresence>
-            </ul>
-            {plan.items.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No items. Ask the agent below.</p>}
+                      {item.imageUrl && <a href={item.productUrl} target="_blank" rel="noreferrer" className="shrink-0" aria-label={`View ${item.name}`}><img src={item.imageUrl} alt="" className="size-9 rounded-md object-contain" /></a>}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-pretty text-[15px] font-medium leading-snug">{item.productUrl ? <a href={item.productUrl} target="_blank" rel="noreferrer" className="hover:underline">{item.name}</a> : item.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {item.supplier} · {usdPrecise(item.unitPrice)} · {item.delivery}
+                        </p>
+                      </div>
+                      <div className="flex items-center rounded-full border border-border">
+                        <button
+                          onClick={() => setQty(item.id, item.qty - Math.max(1, Math.round(item.qty * 0.1)))}
+                          aria-label={`Decrease ${item.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Minus className="size-3" />
+                        </button>
+                        <label className="sr-only" htmlFor={`q-${item.id}`}>
+                          Quantity for {item.name}
+                        </label>
+                        <input
+                          id={`q-${item.id}`}
+                          inputMode="numeric"
+                          value={item.qty}
+                          onChange={(e) => setQty(item.id, Number(e.target.value.replace(/\D/g, '').slice(0, 6)) || 1)}
+                          className="w-12 bg-transparent text-center text-sm outline-none tabular"
+                        />
+                        <button
+                          onClick={() => setQty(item.id, item.qty + Math.max(1, Math.round(item.qty * 0.1)))}
+                          aria-label={`Increase ${item.name}`}
+                          className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Plus className="size-3" />
+                        </button>
+                      </div>
+                      <span className="hidden w-20 text-right text-sm tabular sm:block">{usdPrecise(item.qty * item.unitPrice)}</span>
+                      <button
+                        onClick={() => remove(item.id)}
+                        aria-label={`Remove ${item.name}`}
+                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground opacity-60 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </motion.li>
+                  ))}
+                </AnimatePresence>
+              </ul>
+              {plan.items.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">No items. Ask the agent below.</p>}
 
-            <AnimatePresence>
-              {revising && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm"
-                >
-                  <div role="status" className="px-5 text-center"><p className="shimmer-text font-serif text-2xl">Revising proposal…</p><p className="mt-2 text-sm text-muted-foreground">{revisionProgress}</p></div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Card>
+              <AnimatePresence>
+                {revising && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 flex items-center justify-center bg-card/80 backdrop-blur-sm"
+                  >
+                    <div role="status" className="px-5 text-center"><p className="shimmer-text font-serif text-2xl">Revising proposal…</p><p className="mt-2 text-sm text-muted-foreground">{revisionProgress}</p></div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </Card>
           </fieldset>
 
           <form
