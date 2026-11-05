@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Logo } from './brand'
 import { SettingsDialog } from './settings-dialog'
 import { useStore } from '@/lib/store'
+import { LogoutButton } from './logout-button'
 import { ThemeToggle } from './theme-toggle'
 
 export function TopBar({ children }: { children?: React.ReactNode }) {
@@ -19,6 +20,7 @@ export function TopBar({ children }: { children?: React.ReactNode }) {
         {children}
         <div className="flex items-center gap-1.5">
           <ThemeToggle />
+          <LogoutButton />
           <motion.span
             key={settings.orgName}
             initial={{ opacity: 0, y: 4 }}
