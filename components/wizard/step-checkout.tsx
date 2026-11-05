@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import type { Draft } from './campaign-wizard'
 
 import { paypalSDK } from '@/lib/paypal-client'
-import { estimatedPlan, totalsCents } from '@/lib/money'
+import { totalsCents } from '@/lib/money'
 const PHRASE = 'I approve'
 type Pending = { orderId: string; ticket: string; approvalUrl: string }
 async function post(url: string, input: unknown) {
@@ -53,7 +53,7 @@ export function StepCheckout({
   onPaymentComplete: (b: boolean) => void
   onBack: () => void
 }) {
-  const { settings, addOrders, saveProposal, campaigns } = useStore()
+  const { settings, refresh, flush, campaigns } = useStore()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [receipt, setReceipt] = useState<Order | null>(null)
@@ -64,7 +64,6 @@ export function StepCheckout({
   const [paymentStage, setPaymentStage] = useState('')
   const paymentLock = useRef(false)
   const captureLock = useRef(false)
-  const key = 'prova-payment-' + existingId
   const totals = totalsCents(plan.items)
   const groups = [...new Set(plan.items.map((p) => p.supplier))]
   useEffect(() => {
@@ -87,49 +86,7 @@ export function StepCheckout({
       const result = await post('/api/checkout/capture', payment)
       if (result.campaignId !== existingId)
         throw new Error('Payment belongs to another campaign.')
-      // Save the verified receipt before removing the recovery ticket.
-      const raw = localStorage.getItem('prova-workspace-v1')
-      if (!raw)
-        throw new Error(
-          'Payment verified, but workspace could not be saved. Keep this page open and retry verification.',
-        )
-      const workspace = JSON.parse(raw)
-      workspace.campaigns = workspace.campaigns.map((c: any) =>
-        c.id === result.campaignId
-          ? {
-              ...c,
-              proposal: null,
-              orders: [
-                ...c.orders.filter((o: Order) => o.id !== result.receipt.id),
-                result.receipt,
-              ],
-            }
-          : c,
-      )
-      localStorage.setItem('prova-workspace-v1', JSON.stringify(workspace))
-      addOrders(
-        result.campaignId,
-        [result.receipt],
-        [
-          {
-            at: Date.now(),
-            actor: 'user',
-            message: 'Approved proposal through PayPal sandbox',
-          },
-          {
-            at: Date.now(),
-            actor: 'paypal',
-            message: `Sandbox payment captured · ${result.receipt.paypalTxn} · fulfillment simulated`,
-          },
-        ],
-      )
-      saveProposal(
-        result.campaignId,
-        campaigns.find((c) => c.id === existingId)?.request || '',
-        null,
-      )
-      localStorage.removeItem('prova-attempt-' + existingId)
-      localStorage.removeItem(key)
+      await refresh()
       setPending(null)
       setReceipt(result.receipt)
       callbacks.current.onPaymentComplete(true)
@@ -150,33 +107,22 @@ export function StepCheckout({
   useEffect(() => {
     if (started.current) return
     started.current = true
-    try {
-      const raw = localStorage.getItem(key)
-      if (!raw) return
-      const payment: Pending = JSON.parse(raw)
-      setPending(payment)
-      const params = new URLSearchParams(window.location.search)
-      if (params.get('payment') === 'cancelled') {
-        localStorage.removeItem(key)
-        setPending(null)
-        setError(
-          'PayPal approval was cancelled. You have not been marked paid. You can start checkout again.',
-        )
-        return
-      }
-      if (
-        params.get('payment') === 'approved' &&
-        params.get('token') !== payment.orderId
-      ) {
-        setError(
-          'PayPal returned a different order. Please retry verification.',
-        )
-        return
-      }
-      void capture(payment)
-    } catch {
-      setError('Could not restore pending checkout.')
-    }
+    void (async () => {
+      try {
+        const response = await fetch('/api/checkout/pending?campaign=' + encodeURIComponent(existingId || ''))
+        if (!response.ok) throw new Error('Could not restore checkout.')
+        const payment = await response.json()
+        if (!payment) return
+        setPending(payment)
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('payment') === 'cancelled') {
+          setError('PayPal approval was cancelled. Resume approval or verify before starting another payment.')
+          return
+        }
+        if (params.get('payment') === 'approved' && params.get('token') !== payment.orderId) throw new Error('Payment order mismatch.')
+        if (params.get('payment') === 'approved' || payment.requiresApproval === false) await capture(payment)
+      } catch (e) { setError(e instanceof Error ? e.message : 'Could not restore checkout.') }
+    })()
   }, [])
   async function approvePayment(payment: Pending) {
     const sdk = await paypalSDK()
@@ -190,8 +136,6 @@ export function StepCheckout({
         await capture(payment)
       },
       onCancel: () => {
-        localStorage.removeItem(key)
-        localStorage.removeItem('prova-attempt-' + existingId)
         setPending(null)
         paymentLock.current = false
         setBusy(false)
@@ -237,11 +181,8 @@ export function StepCheckout({
     onPayingChange(true)
     try {
       if (!existingId) throw new Error('Save the campaign before checkout.')
-      const attemptKey = 'prova-attempt-' + existingId
-      const attemptId = localStorage.getItem(attemptKey) || crypto.randomUUID()
-      localStorage.setItem(attemptKey, attemptId)
+      await flush()
       const result = await post('/api/checkout/create', {
-        attemptId,
         campaignId: existingId,
         snapshot: plan.snapshot,
         items: plan.items.map((p) => ({ id: p.id, qty: p.qty })),
@@ -251,18 +192,7 @@ export function StepCheckout({
         ticket: result.ticket,
         approvalUrl: result.approvalUrl,
       }
-      // Persist the approved cart before leaving this page.
-      const raw = localStorage.getItem('prova-workspace-v1')
-      if (!raw)
-        throw new Error(
-          'Workspace could not be saved. Enable browser storage before payment.',
-        )
-      const workspace = JSON.parse(raw)
-      workspace.campaigns = workspace.campaigns.map((c: any) =>
-        c.id === existingId ? { ...c, proposal: estimatedPlan(plan) } : c,
-      )
-      localStorage.setItem('prova-workspace-v1', JSON.stringify(workspace))
-      localStorage.setItem(key, JSON.stringify(payment))
+      await refresh()
       setPending(payment)
       if (result.requiresApproval === false) await capture(payment)
       else {

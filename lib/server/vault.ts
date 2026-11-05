@@ -1,12 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { cookies } from 'next/headers'
-import { readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { database } from './db'
 import { env, sign, verify } from './common'
 import { paypalRest } from './paypal'
 
 const COOKIE = 'prova-paypal-vault'
-const DEFAULT = 'PAYPAL_DEFAULT_VAULT_WALLET'
 
 type SavedWallet = { id: string; email: string; customerId?: string }
 const key = () => createHash('sha256').update(env('PAYPAL_CLIENT_SECRET') + ':vault-cookie').digest()
@@ -19,27 +17,17 @@ function seal(wallet: SavedWallet) {
 }
 
 async function setDefaultWallet(wallet: SavedWallet | null) {
-  const file = join(process.cwd(), '.env.local')
-  const current = await readFile(file, 'utf8').catch(() => '')
-  const value = wallet ? seal(wallet) : ''
-  const lines = current.split(/\r?\n/).filter(line => !line.startsWith(`${DEFAULT}=`))
-  if (value) lines.push(`${DEFAULT}=${value}`)
-  await writeFile(file, lines.filter(Boolean).join('\n') + '\n', 'utf8')
-  if (value) process.env[DEFAULT] = value
-  else delete process.env[DEFAULT]
+  await database().query("UPDATE workspace SET wallet=$1 WHERE id='demo'", [wallet ? seal(wallet) : null])
 }
 
 export async function savedWallet(): Promise<SavedWallet | null> {
-  const cookie = (await cookies()).get(COOKIE)?.value
-  const value = cookie || process.env[DEFAULT]
+  const value = (await database().query("SELECT wallet FROM workspace WHERE id='demo'")).rows[0]?.wallet
   if (!value) return null
   try {
     const bytes = Buffer.from(value, 'base64url')
     const decipher = createDecipheriv('aes-256-gcm', key(), bytes.subarray(0, 12))
     decipher.setAuthTag(bytes.subarray(12, 28))
     const wallet: SavedWallet = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString())
-    // Adopt the already-approved sandbox wallet for this shared demo workspace.
-    if (cookie && !process.env[DEFAULT]) await setDefaultWallet(wallet)
     return wallet
   } catch {
     return null

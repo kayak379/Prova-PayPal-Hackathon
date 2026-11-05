@@ -1,3 +1,4 @@
+import { appOrigin } from '@/lib/server/origin'
 import { cookies } from 'next/headers'
 import { finishWallet, removeWallet, savedWallet, setupWallet } from '@/lib/server/vault'
 import { message } from '@/lib/server/common'
@@ -8,7 +9,7 @@ export async function GET() {
 }
 export async function POST(request: Request) {
  try {
-  const origin = new URL(request.headers.get('origin') || request.url).origin
+  const origin = appOrigin(request)
   const body = await request.json()
   if (body.action === 'setup') return Response.json(await setupWallet(origin))
   if (body.action === 'confirm') {

@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 export function env(name: string) {
   const value = process.env[name]
-  if (!value) throw new Error(`Missing ${name} in .env.local`)
+  if (!value) throw new Error(`Missing server environment variable ${name}`)
   return value
 }
 

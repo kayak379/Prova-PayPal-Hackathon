@@ -37,7 +37,7 @@ export function FinancePanel({
   mode: 'funding' | 'finance' | 'refund'
   refundOrderId?: string
 }) {
-  const { updateFinance } = useStore()
+  const { updateFinance, refresh, flush } = useStore()
   const latest = useRef(campaign)
   latest.current = campaign
   const [busy, setBusy] = useState(false)
@@ -89,27 +89,12 @@ export function FinancePanel({
   const [orderId, setOrderId] = useState(
     refundOrderId || campaign.orders[0]?.id || '',
   )
-  function persist(patch: Partial<Campaign>, message?: string) {
-    const c = latest.current
-    try {
-      const raw = localStorage.getItem('prova-workspace-v1')
-      if (!raw) throw new Error('Workspace missing')
-      if (raw) {
-        const data = JSON.parse(raw)
-        data.campaigns = data.campaigns.map((v: Campaign) =>
-          v.id === c.id ? { ...v, ...patch } : v,
-        )
-        localStorage.setItem('prova-workspace-v1', JSON.stringify(data))
-      }
-    } catch {
-      throw new Error(
-        'Could not persist financial operation. Enable browser storage before continuing.',
-      )
-    }
-    latest.current = { ...c, ...patch }
-    updateFinance(c.id, patch, message)
+  async function persist(patch: Partial<Campaign>, message?: string) {
+    await updateFinance(latest.current.id, patch, message)
+    latest.current = { ...latest.current, ...patch }
   }
   async function api(action: string, extra: object = {}, c = latest.current) {
+    await flush()
     const r = await fetch('/api/finance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -117,6 +102,7 @@ export function FinancePanel({
     })
     const d = await r.json()
     if (!r.ok) throw new Error(d.error || 'PayPal request failed')
+    await refresh()
     return d
   }
   async function work(
@@ -137,7 +123,7 @@ export function FinancePanel({
       setBusy(false)
     }
   }
-  function apply(data: any) {
+  async function apply(data: any) {
     const c = latest.current
     const patch: any = {}
     if (data.funding)
@@ -147,10 +133,10 @@ export function FinancePanel({
     if (data.refund) patch.refunds = upsert(c.refunds || [], data.refund)
     if (data.refunds) patch.refunds = data.refunds
     if (data.verification) patch.verification = data.verification
-    persist(patch, 'PayPal sandbox financial records refreshed')
+    await persist(patch, 'PayPal sandbox financial records refreshed')
   }
   async function publish(id: string) {
-    apply(await api('invoice', { id, publish: true }))
+    await apply(await api('invoice', { id, publish: true }))
   }
   async function confirm(action: FinanceAction) {
     const operations = latest.current.financeOperations || []
@@ -160,7 +146,7 @@ export function FinancePanel({
       )
     )
       return
-    persist({
+    await persist({
       financeOperations: upsert(operations, {
         id: action.operationId,
         action,
@@ -168,8 +154,8 @@ export function FinancePanel({
       }),
     })
     const result = await api('confirm', { token: action.token })
-    apply(result)
-    persist(
+    await apply(result)
+    await persist(
       {
         financeOperations: latest.current.financeOperations!.map((op) =>
           op.id === action.operationId
@@ -215,7 +201,7 @@ export function FinancePanel({
     if (!text) return
     const c = latest.current
     const history = c.financeMessages || []
-    persist({
+    await persist({
       financeMessages: [
         ...history,
         { id: crypto.randomUUID(), role: 'user', text },
@@ -233,8 +219,9 @@ export function FinancePanel({
         d.error || 'Assistant unavailable; guided controls remain available.',
       )
     }
-    if (d.patch && Object.keys(d.patch).length) apply(d.patch)
-    persist({
+    await refresh()
+    if (d.patch && Object.keys(d.patch).length) await apply(d.patch)
+    await persist({
       financeMessages: [
         ...(latest.current.financeMessages || []),
         {

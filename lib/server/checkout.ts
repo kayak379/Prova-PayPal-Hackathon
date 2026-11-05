@@ -2,7 +2,7 @@ import type { PlanItem, Order } from '../types'
 import { estimatedPlan, totalsCents } from '../money'
 import { sign, verify } from './common'
 import { savedWallet } from './vault'
-import { paypal, paypalRest } from './paypal'
+import { paypalRest } from './paypal'
 
 type Prices = {
   mock?: boolean
@@ -75,14 +75,18 @@ export async function createCheckout(body: any, origin: string) {
         }],
         payment_source: { paypal: { vault_id: wallet.id } },
       }, /^[a-f0-9-]{36}$/.test(body.attemptId || '') ? body.attemptId : undefined)
-    : await paypal('create_order', {
-        currencyCode: 'USD',
-        items: lines,
-        shippingCost: totals.shipping / 100,
-        returnUrl,
-        cancelUrl,
-        notes: 'Prova sandbox demonstration. Retailer fulfillment simulated.',
-      })
+    : await paypalRest('/v2/checkout/orders', 'POST', {
+        intent: 'CAPTURE',
+        purchase_units: [{
+          amount: { currency_code: 'USD', value: (totals.total / 100).toFixed(2), breakdown: {
+            item_total: { currency_code: 'USD', value: ((totals.subtotal + totals.tax) / 100).toFixed(2) },
+            shipping: { currency_code: 'USD', value: (totals.shipping / 100).toFixed(2) },
+          } },
+          items: lines.map(p => ({ name: p.name, quantity: String(p.quantity), unit_amount: { currency_code: 'USD', value: p.itemCost.toFixed(2) } })),
+          description: 'Prova sandbox demonstration. Retailer fulfillment simulated.',
+        }],
+        payment_source: { paypal: { experience_context: { return_url: returnUrl, cancel_url: cancelUrl, shipping_preference: 'NO_SHIPPING', user_action: 'PAY_NOW' } } },
+      }, body.attemptId)
 
   const approvalUrl = order.links?.find((link: any) => ['payer-action', 'approve'].includes(link.rel))?.href
   const requiresApproval = !['COMPLETED', 'APPROVED'].includes(order.status)
@@ -106,14 +110,14 @@ export async function createCheckout(body: any, origin: string) {
 export async function captureCheckout(body: any) {
   const ticket = verify<Ticket>(body.ticket)
   if (ticket.kind !== 'payment' || ticket.orderId !== body.orderId) throw new Error('Invalid payment reference.')
-  let order = await paypal('get_order', { id: ticket.orderId })
+  let order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId))
   if (order.status === 'APPROVED') {
     try {
-      await paypal('pay_order', { id: ticket.orderId })
+      await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId) + '/capture', 'POST', {}, 'capture-' + ticket.orderId)
     } catch {
       // Retrieve authoritative status after a timeout or concurrent capture.
     }
-    order = await paypal('get_order', { id: ticket.orderId })
+    order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId))
   }
   const capture = order.purchase_units?.[0]?.payments?.captures?.[0]
   if (order.status !== 'COMPLETED' || capture?.status !== 'COMPLETED') throw new Error('Payment is not completed. Approve it in PayPal, then retry verification.')
