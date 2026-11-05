@@ -61,6 +61,8 @@ export type AuditEntry = {
 }
 
 export type Campaign = {
+  version?: number
+  demo?: boolean
   requestAttachment?: { name: string; content: string } | null
   id: string
   name: string
