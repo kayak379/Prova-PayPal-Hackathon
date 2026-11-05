@@ -14,7 +14,7 @@ export function CampaignSettings({ campaign, onClose }: { campaign: Campaign; on
   const [error, setError] = useState('')
   const spent = campaignSpent(campaign)
 
-  function saveCampaign(event: React.FormEvent<HTMLFormElement>) {
+  async function saveCampaign(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const amount = Number(budget)
     if (!name.trim()) {
@@ -29,7 +29,7 @@ export function CampaignSettings({ campaign, onClose }: { campaign: Campaign; on
       setError('Choose a folder.')
       return
     }
-    updateCampaign(campaign.id, { name: name.trim(), budget: amount, folderId })
+    try { await updateCampaign(campaign.id, { name: name.trim(), budget: amount, folderId }) } catch { return }
     onClose()
   }
 

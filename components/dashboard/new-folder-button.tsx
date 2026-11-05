@@ -10,10 +10,10 @@ export function NewFolderButton() {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState('')
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    addFolder(name.trim())
+    try { await addFolder(name.trim()) } catch { return }
     setName('')
     setEditing(false)
   }

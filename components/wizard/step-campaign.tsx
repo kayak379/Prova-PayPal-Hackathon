@@ -102,12 +102,14 @@ function FolderPicker({ value, onChange }: { value: string; onChange: (id: strin
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
 
-  const create = () => {
+  const create = async () => {
     if (!name.trim()) return
-    const f = addFolder(name.trim())
+    try {
+    const f = await addFolder(name.trim())
     onChange(f.id)
     setName('')
     setAdding(false)
+    } catch { /* Store displays save error. */ }
   }
 
   return (

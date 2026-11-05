@@ -1,326 +1,74 @@
 'use client'
-
-import {
-  createContext,
-  useEffect,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from 'react'
-import { uid, campaignSpent } from './format'
-import type {
-  AuditEntry,
-  Campaign,
-  Folder,
-  Order,
-  Plan,
-  Settings,
-} from './types'
-
-const seedFolders: Folder[] = [
-  { id: 'f_hurricane', name: 'Hurricane Season 2026' },
-  { id: 'f_wildfire', name: 'Wildfire Response' },
-  { id: 'f_archive', name: 'Archive' },
-]
-
-type Store = {
-  updateFinance: (
-    id: string,
-    patch: Partial<
-      Pick<
-        Campaign,
-        | 'funding'
-        | 'refunds'
-        | 'financeMessages'
-        | 'verification'
-        | 'financeOperations'
-      >
-    >,
-    message?: string,
-  ) => void
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import type { AuditEntry, Campaign, Folder, Order, Plan, Settings } from './types'
+type Workspace = { settings: Settings; folders: Folder[]; campaigns: Campaign[]; version: number }
+const empty: Workspace = { settings: { orgName: '', taxId: '', address: '' }, folders: [], campaigns: [], version: 0 }
+type Store = Workspace & {
   hydrated: boolean
-  saveProposal: (
-    id: string,
-    request: string,
-    proposal: Plan | null,
-    attachment?: Campaign['requestAttachment'],
-  ) => void
-  settings: Settings
-  folders: Folder[]
-  campaigns: Campaign[]
-  updateSettings: (s: Settings) => void
-  addFolder: (name: string) => Folder
-  addCampaign: (
-    c: Omit<Campaign, 'id' | 'createdAt' | 'orders' | 'audit'>,
-  ) => Campaign
-  addOrders: (
-    campaignId: string,
-    orders: Order[],
-    audit: Omit<AuditEntry, 'id'>[],
-  ) => void
-  updateCampaign: (
-    id: string,
-    changes: Pick<Campaign, 'name' | 'budget' | 'folderId'>,
-  ) => void
-  logAudit: (campaignId: string, entry: Omit<AuditEntry, 'id' | 'at'>) => void
+  refresh: () => Promise<void>
+  flush: () => Promise<void>
+  updateFinance: (id: string, patch: Partial<Campaign>, message?: string) => Promise<void>
+  saveProposal: (id: string, request: string, proposal: Plan | null, attachment?: Campaign['requestAttachment']) => Promise<void>
+  updateSettings: (settings: Settings) => Promise<void>
+  addFolder: (name: string) => Promise<Folder>
+  addCampaign: (draft: Omit<Campaign, 'id' | 'createdAt' | 'orders' | 'audit'>) => Promise<Campaign>
+  addOrders: (id: string, orders: Order[], audit: Omit<AuditEntry, 'id'>[]) => Promise<void>
+  updateCampaign: (id: string, changes: Pick<Campaign, 'name' | 'budget' | 'folderId'>) => Promise<void>
+  logAudit: (id: string, entry: Omit<AuditEntry, 'id' | 'at'>) => Promise<void>
 }
-
 const StoreContext = createContext<Store | null>(null)
-
 export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const path = usePathname()
+  const protectedPage = path.startsWith('/dashboard') || path.startsWith('/campaigns')
+  const [data, setData] = useState(empty)
+  const current = useRef(data)
   const [hydrated, setHydrated] = useState(false)
-  const [storageError, setStorageError] = useState(false)
-  const [settings, setSettings] = useState<Settings>({
-    paypalEmail: 'sb-ck0ck53381775@personal.example.com',
-    orgName: 'Harbor Relief Alliance',
-    taxId: '84-2918374',
-    address: '1200 Relief Way, Houston, TX 77002',
-  })
-  const [folders, setFolders] = useState<Folder[]>(seedFolders)
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('prova-workspace-v1')
-      if (raw) {
-        const data = JSON.parse(raw)
-        if (
-          !Array.isArray(data.campaigns) ||
-          !Array.isArray(data.folders) ||
-          !data.settings
-        )
-          throw new Error('Invalid workspace')
-        setSettings({
-          paypalEmail: 'sb-ck0ck53381775@personal.example.com',
-          ...data.settings,
-        })
-        setFolders(data.folders)
-        setCampaigns(data.campaigns)
-      }
-    } catch {
-      setStorageError(true)
+  const [error, setError] = useState('')
+  const failed = useRef<null | (() => Promise<unknown>)>(null)
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
+  const accept = useCallback((value: Workspace) => { current.current = value; setData(value); setHydrated(true) }, [])
+  const refresh = useCallback(async () => {
+    const response = await fetch('/api/workspace', { cache: 'no-store' })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error || 'Workspace unavailable.')
+    accept(result)
+  }, [accept])
+  useEffect(() => { if (protectedPage) void refresh().catch(e => setError(e.message)) }, [protectedPage, refresh])
+  const mutate = useCallback((command: Record<string, unknown>): Promise<any> => {
+    if ((command.kind === 'create' || command.kind === 'folder') && !command.entityId) command = { ...command, entityId: crypto.randomUUID() }
+    const run = async () => {
+      const c = current.current.campaigns.find(c => c.id === command.id)
+      const response = await fetch('/api/workspace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...command, version: c?.version ?? current.current.version }) })
+      const result = await response.json()
+      if (!response.ok) { await refresh().catch(() => {}); throw new Error(result.error || 'Save failed.') }
+      accept(result.workspace); setError(''); failed.current = null
+      return result.entity
     }
-    setHydrated(true)
-  }, [])
-  useEffect(() => {
-    if (!hydrated) return
-    try {
-      localStorage.setItem(
-        'prova-workspace-v1',
-        JSON.stringify({ settings, folders, campaigns }),
-      )
-    } catch {
-      setStorageError(true)
-    }
-  }, [hydrated, settings, folders, campaigns])
-  const saveProposal = useCallback(
-    (
-      id: string,
-      request: string,
-      proposal: Plan | null,
-      attachment?: Campaign['requestAttachment'],
-    ) => {
-      setCampaigns((list) =>
-        list.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                request,
-                ...(attachment !== undefined
-                  ? { requestAttachment: attachment }
-                  : {}),
-                proposal,
-                audit:
-                  proposal?.snapshot &&
-                  proposal.snapshot !== c.proposal?.snapshot
-                    ? [
-                        ...c.audit,
-                        {
-                          id: uid('a_'),
-                          at: Date.now(),
-                          actor: 'agent' as const,
-                          message:
-                            'Live product proposal generated from Channel3 offers',
-                        },
-                      ]
-                    : c.audit,
-              }
-            : c,
-        ),
-      )
-    },
-    [],
-  )
-
-  const updateFinance = useCallback<Store['updateFinance']>(
-    (id, patch, message) => {
-      setCampaigns((list) =>
-        list.map((c) =>
-          c.id !== id
-            ? c
-            : {
-                ...c,
-                ...patch,
-                audit: message
-                  ? [
-                      ...c.audit,
-                      {
-                        id: uid('a_'),
-                        at: Date.now(),
-                        actor: 'paypal' as const,
-                        message,
-                      },
-                    ]
-                  : c.audit,
-              },
-        ),
-      )
-    },
-    [],
-  )
-
-  const addFolder = useCallback((name: string) => {
-    const folder = { id: uid('f_'), name }
-    setFolders((f) => [...f, folder])
-    return folder
-  }, [])
-
-  const addCampaign = useCallback<Store['addCampaign']>((c) => {
-    const now = Date.now()
-    const campaign: Campaign = {
-      ...c,
-      id: uid('c_'),
-      createdAt: now,
-      orders: [],
-      audit: [
-        {
-          id: uid('a_'),
-          at: now,
-          actor: 'user',
-          message: `Campaign created with $${c.budget.toLocaleString()} budget`,
-        },
-      ],
-    }
-    setCampaigns((list) => [campaign, ...list])
-    return campaign
-  }, [])
-
-  const addOrders = useCallback<Store['addOrders']>(
-    (campaignId, orders, audit) => {
-      setCampaigns((list) =>
-        list.map((c) =>
-          c.id === campaignId &&
-          !orders.every((o) => c.orders.some((old) => old.id === o.id))
-            ? {
-                ...c,
-                orders: [
-                  ...orders.filter(
-                    (o) => !c.orders.some((old) => old.id === o.id),
-                  ),
-                  ...c.orders,
-                ],
-                proposal: null,
-                audit: [
-                  ...c.audit,
-                  ...audit.map((a) => ({ ...a, id: uid('a_') })),
-                ],
-              }
-            : c,
-        ),
-      )
-    },
-    [],
-  )
-
-  const updateCampaign = useCallback<Store['updateCampaign']>((id, changes) => {
-    setCampaigns((list) =>
-      list.map((c) => {
-        if (c.id !== id) return c
-        const spent = campaignSpent(c)
-        if (
-          !changes.name.trim() ||
-          !Number.isFinite(changes.budget) ||
-          changes.budget <= 0 ||
-          changes.budget < spent
-        )
-          return c
-        return {
-          ...c,
-          ...changes,
-          name: changes.name.trim(),
-          audit: [
-            ...c.audit,
-            {
-              id: uid('a_'),
-              at: Date.now(),
-              actor: 'user' as const,
-              message: `Campaign settings updated · ${changes.name.trim()} · $${changes.budget.toLocaleString()} budget · folder ${changes.folderId}`,
-            },
-          ],
-        }
-      }),
-    )
-  }, [])
-
-  const logAudit = useCallback<Store['logAudit']>((campaignId, entry) => {
-    setCampaigns((list) =>
-      list.map((c) =>
-        c.id === campaignId
-          ? {
-              ...c,
-              audit: [...c.audit, { ...entry, id: uid('a_'), at: Date.now() }],
-            }
-          : c,
-      ),
-    )
-  }, [])
-
-  const value = useMemo(
-    () => ({
-      updateFinance,
-      hydrated,
-      saveProposal,
-      settings,
-      folders,
-      campaigns,
-      updateSettings: setSettings,
-      addFolder,
-      addCampaign,
-      addOrders,
-      updateCampaign,
-      logAudit,
-    }),
-    [
-      updateFinance,
-      hydrated,
-      saveProposal,
-      settings,
-      folders,
-      campaigns,
-      addFolder,
-      addCampaign,
-      addOrders,
-      updateCampaign,
-      logAudit,
-    ],
-  )
-
-  return (
-    <StoreContext.Provider value={value}>
-      {storageError && (
-        <p role="alert" className="bg-destructive/10 p-3 text-center text-sm">
-          Browser storage is unavailable or damaged. Changes may not survive
-          refresh.
-        </p>
-      )}
-      {hydrated ? children : <p className="p-10">Loading workspace…</p>}
-    </StoreContext.Provider>
-  )
+    const pending = queue.current.then(run)
+    queue.current = pending.catch(e => { setError(e.message); failed.current = () => mutate(command) })
+    return pending
+  }, [accept, refresh])
+  const flush = useCallback(async () => { await queue.current; if (failed.current) throw new Error('Save failed. Retry before continuing.') }, [])
+  const saveProposal = useCallback(async (id: string, request: string, proposal: Plan | null, attachment?: Campaign['requestAttachment']) => {
+    const c = current.current.campaigns.find(c => c.id === id)
+    if (c && c.request === request && JSON.stringify(c.proposal ?? null) === JSON.stringify(proposal) && JSON.stringify(c.requestAttachment ?? null) === JSON.stringify(attachment ?? null)) return
+    await mutate({ kind: 'proposal', id, request, proposal, attachment })
+  }, [mutate])
+  const value = useMemo<Store>(() => ({
+    ...data, hydrated, refresh, flush, saveProposal,
+    updateFinance: async (id, patch) => { await mutate({ kind: 'finance', id, patch }) },
+    updateSettings: async settings => { await mutate({ kind: 'settings', settings }) },
+    addFolder: name => mutate({ kind: 'folder', name }),
+    addCampaign: draft => mutate({ kind: 'create', draft }),
+    addOrders: async () => { await refresh() },
+    updateCampaign: async (id, changes) => { await mutate({ kind: 'campaign', id, changes }) },
+    logAudit: async (id, entry) => { await mutate({ kind: 'audit', id, entry }) },
+  }), [data, hydrated, refresh, flush, saveProposal, mutate])
+  return <StoreContext.Provider value={value}>
+    {protectedPage && error && <div role="alert" className="bg-destructive/10 p-3 text-center text-sm">{error} <button className="underline" onClick={() => { void (failed.current ? failed.current() : refresh()).catch(e => setError(e.message)) }}>Retry</button></div>}
+    {protectedPage && hydrated && <p className="bg-muted px-4 py-2 text-center text-xs">Shared demo workspace · Sample campaigns contain synthetic data. Create a new campaign for PayPal sandbox tools.</p>}
+    {protectedPage && !hydrated ? <p className="p-10">Loading workspace…</p> : children}
+  </StoreContext.Provider>
 }
-
-export function useStore() {
-  const ctx = useContext(StoreContext)
-  if (!ctx) throw new Error('useStore must be used within StoreProvider')
-  return ctx
-}
+export function useStore() { const value = useContext(StoreContext); if (!value) throw new Error('useStore must be used within StoreProvider'); return value }

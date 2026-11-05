@@ -68,7 +68,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
   const [[step, dir], setStep] = useState<[number, number]>([
     existing
       ? typeof window !== 'undefined' &&
-        localStorage.getItem('prova-payment-' + existing.id)
+        new URLSearchParams(window.location.search).has('payment')
         ? 3
         : existing.proposal
           ? 2
@@ -91,7 +91,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
   const [discovering, setDiscovering] = useState(false)
 
   useEffect(() => {
-    if (createdId) saveProposal(createdId, prompt, plan, csv)
+    if (createdId) void saveProposal(createdId, prompt, plan, csv).catch(() => {})
   }, [createdId, prompt, plan, csv, saveProposal])
 
   const go = (next: number) => setStep([next, next > step ? 1 : -1])
@@ -102,7 +102,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
     return (
       <main className="p-10">
         <h1 className="font-serif text-3xl">
-          Campaign not found in this browser
+          Campaign not found in this workspace
         </h1>
         <Link href="/dashboard">Return to campaigns</Link>
       </main>
@@ -158,14 +158,15 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
                 <StepCampaign
                   draft={draft}
                   setDraft={setDraft}
-                  onNext={() => {
+                  onNext={async () => {
+                    try {
                     if (existing) {
-                      updateCampaign(existing.id, {
+                      await updateCampaign(existing.id, {
                         ...draft,
                         budget: draft.budget + campaignSpent(existing),
                       })
                     } else {
-                      const campaign = addCampaign(draft)
+                      const campaign = await addCampaign(draft)
                       window.history.replaceState(
                         null,
                         '',
@@ -174,6 +175,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
                       setCreatedId(campaign.id)
                     }
                     go(1)
+                    } catch { /* Store shows a retryable save error. */ }
                   }}
                 />
               )}

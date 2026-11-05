@@ -54,7 +54,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
             const saved = await vaultRequest('confirm', setup.ticket)
             setWallet(saved)
             setForm(f => ({ ...f, paypalEmail: saved.email }))
-            updateSettings({ ...form, paypalEmail: saved.email })
+            await updateSettings({ ...form, paypalEmail: saved.email })
           } catch (error) {
             setWalletError(error instanceof Error ? error.message : 'Wallet save failed')
           } finally {
@@ -83,7 +83,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
     try {
       setWallet(await vaultRequest('remove'))
       setForm(f => ({ ...f, paypalEmail: '' }))
-      updateSettings({ ...form, paypalEmail: '' })
+      await updateSettings({ ...form, paypalEmail: '' })
     } catch (error) {
       setWalletError(error instanceof Error ? error.message : 'Could not remove PayPal')
     } finally {
@@ -93,9 +93,9 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
 
   const [saved, setSaved] = useState(false)
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateSettings(form)
+    try { await updateSettings(form) } catch { return }
     setSaved(true)
     setTimeout(onClose, 650)
   }
