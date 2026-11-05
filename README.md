@@ -1,5 +1,7 @@
 # Prova system architecture
 
+Deployment instructions: [Render + PostgreSQL setup](docs/render-deployment.md). The app now uses a shared database workspace and server-verified demo login.
+
 Prova uses AI to plan disaster relief purchases and help operators manage campaign finances. Both agents use OpenRouter and Gemini, with different roles for the model in each workflow.
 
 - **Supply discovery agent.** Given a request like “supply 200 people after a flood,” the model plans catalog searches, selects from retrieved products, and proposes quantities and reasons. The server validates the model’s structured output against Channel3 offers and calculates quantities that fit the budget. [Discovery workflow](#supply-discovery-agent)
@@ -8,47 +10,54 @@ Prova uses AI to plan disaster relief purchases and help operators manage campai
 ```mermaid
 flowchart LR
     subgraph Browser["Browser · React"]
-        direction TB
-        Request["Campaign request<br/>and proposal review"]
-        Approval["Buyer approval<br/>and finance confirmation"]
-        Workspace[("Campaign workspace<br/>localStorage")]
+        Login["Team sign-in"]
+        Workspace["Campaign dashboard and wizard<br/>React state · theme in localStorage"]
+        Approval["Proposal approval<br/>and finance confirmation"]
+        SDK["PayPal Web SDK v6<br/>payer consent"]
     end
 
-    subgraph Server["Next.js · server routes"]
-        direction TB
-        Discovery["AI discovery agent<br/>plan → retrieve → select → validate"]
-        Assistant["AI finance assistant<br/>choose tools → read results → prepare"]
-        Payments["Checkout and finance services<br/>validate → execute → verify"]
+    subgraph Render["Render · Ohio private network"]
+        subgraph Web["Next.js Node web service"]
+            Auth["Proxy and authentication routes<br/>signed HttpOnly session cookie"]
+            API["Workspace API<br/>validation and version checks"]
+            Discovery["Discovery agent<br/>plan → retrieve → validate → allocate"]
+            Assistant["Finance assistant<br/>bounded tool loop → review cards"]
+            Payments["Checkout and finance services<br/>validate → execute → verify"]
+        end
+        Database[("Managed PostgreSQL<br/>workspace · campaigns · recovery tickets<br/>encrypted wallet references")]
+        Setup["Pre-deploy setup<br/>SQL migrations and first-run sample seed"]
     end
 
     subgraph Providers["External services"]
-        direction TB
         Models["OpenRouter → Gemini<br/>structured output and function calls"]
         Catalog["Channel3<br/>product offers"]
-        PayPal["PayPal Sandbox<br/>Checkout · Vault · Invoicing<br/>Refunds · Transaction Search"]
+        PayPal["PayPal Sandbox<br/>Orders · Vault · Invoicing<br/>Refunds · Transaction Search"]
     end
 
-    Request -->|"request, budget, feedback"| Discovery
-    Discovery -->|"progress and signed proposal"| Request
-    Discovery <-->|"plans and selections"| Models
-    Discovery <-->|"queries and offers"| Catalog
-    Request --- Workspace
-    Approval --- Workspace
+    Login --> Auth
+    Auth -->|"protect pages and API requests"| API
+    Workspace <-->|"authenticated reads and mutations"| API
+    API <-->|"transactions and optimistic versions"| Database
+    Workspace <-->|"requests and signed proposals"| Discovery
+    Discovery <--> Models
+    Discovery <--> Catalog
     Approval <-->|"questions and action cards"| Assistant
-    Assistant <-->|"native tool calls and results"| Models
-    Assistant -->|"status and preparation"| Payments
-    Approval -->|"approved checkout or action token"| Payments
-    Payments <-->|"Toolkit and OAuth REST"| PayPal
-    Approval <-->|"Web SDK v6 payer consent"| PayPal
-    Payments -->|"verified receipts and finance records"| Approval
+    Assistant <--> Models
+    Assistant -->|"campaign tools"| Payments
+    Approval -->|"approved order or action token"| Payments
+    Payments <-->|"authoritative campaigns and verified results"| Database
+    Payments <-->|"OAuth REST and Agent Toolkit"| PayPal
+    Approval --> SDK
+    SDK <-->|"sandbox approval"| PayPal
+    Setup --> Database
 
-    classDef browser fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e,stroke-width:1.5px
-    classDef agent fill:#ede9fe,stroke:#6d28d9,color:#3b0764,stroke-width:1.5px
-    classDef service fill:#dcfce7,stroke:#15803d,color:#14532d,stroke-width:1.5px
-    classDef payment fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:2px
-    class Request,Approval,Workspace browser
+    classDef browser fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
+    classDef agent fill:#ede9fe,stroke:#6d28d9,color:#3b0764
+    classDef service fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef payment fill:#fef3c7,stroke:#b45309,color:#78350f
+    class Login,Workspace,Approval,SDK browser
     class Discovery,Assistant,Models agent
-    class Catalog service
+    class Auth,API,Database,Setup,Catalog service
     class Payments,PayPal payment
 ```
 
@@ -83,26 +92,26 @@ The mock label follows a fallback proposal into checkout and receipts.
 ## PayPal Developer Platform
 I had a lot of fun using the platform. I'd never explored PayPal's sandbox or developer features before (or fintech platforms in general), and I was impressed by how powerful they are.
 
-Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for server-side operations, and direct REST calls for Vault and saved-wallet orders. All three run against PayPal Sandbox.
+Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for server-side operations, and direct REST calls for Vault and Orders v2 checkout. All three run against PayPal Sandbox.
 
 ### Sandbox OAuth and the PayPal Agent Toolkit
 
-The REST adapter exchanges the server-side client ID and secret at `POST /v1/oauth2/token` using the client credentials grant. It sends the resulting bearer token to the Sandbox API and attaches a `PayPal-Request-Id` to POST requests. The Toolkit adapter uses `@paypal/agent-toolkit/openai` in Sandbox mode and dispatches a fixed allowlist of order, invoice, refund and reporting tools. Prova’s finance assistant calls narrower application functions that keep payment writes behind user confirmation. [PayPal adapter](lib/server/paypal.ts)
+The REST adapter exchanges the server-side client ID and secret at `POST /v1/oauth2/token` using the client credentials grant. It sends the resulting bearer token to the Sandbox API and attaches a `PayPal-Request-Id` to POST requests. The Toolkit adapter uses `@paypal/agent-toolkit/openai` in Sandbox mode for finance tools such as invoices, refunds and reporting. Checkout creates, retrieves and captures Orders v2 directly through the REST adapter. Prova’s finance assistant calls narrower application functions that keep payment writes behind user confirmation. [PayPal adapter](lib/server/paypal.ts)
 
 ### PayPal Web SDK v6 and Orders v2
 
 The browser initializes the Sandbox SDK with the public client ID and the `paypal-payments` component. It checks USD payment eligibility with `findEligibleMethods` and opens a modal with `createPayPalOneTimePaymentSession`. The checkout flow also retains a Sandbox approval link for redirect and recovery. [Browser SDK](lib/paypal-client.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
 
-The server reconstructs the cart from signed catalog prices, checks the budget, and binds the order ID, campaign, approved items and total to a signed payment ticket. For a one-time purchase it uses the Toolkit’s `create_order`. With a saved wallet it sends `POST /v2/checkout/orders` with the PayPal `vault_id`, the charge breakdown and the checkout attempt’s request ID when available. PayPal can require additional payer approval on that path. [Checkout service](lib/server/checkout.ts)
+The server reconstructs the cart from signed catalog prices, checks the budget, and binds the order ID, campaign, approved items and total to a signed payment ticket. Both one-time and saved-wallet purchases use `POST /v2/checkout/orders`, with a stable request ID committed to PostgreSQL before the external call. Saved-wallet requests include the PayPal `vault_id` and charge breakdown. PayPal can require additional payer approval on that path. [Checkout service](lib/server/checkout.ts)
 
-After approval, `get_order` retrieves the order and `pay_order` captures it when it is approved and still awaiting capture. The server retrieves the order again after the capture attempt, including after a timeout. It issues a receipt only when the order and capture are completed and the capture matches the exact approved USD amount. The browser retains the recovery ticket until the verified receipt is saved. [Checkout service](lib/server/checkout.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
+After approval, `GET /v2/checkout/orders/{id}` retrieves the order and `POST /v2/checkout/orders/{id}/capture` captures an approved order using a stable capture request ID. The server retrieves the order again after the capture attempt, including after a timeout. It issues a receipt only when the order and capture are completed and the capture matches the exact approved USD amount. PostgreSQL retains the pending checkout ticket across browsers and server restarts. The server commits the verified receipt and marks the attempt completed in one database transaction; repeated capture requests return the saved receipt. [Checkout service](lib/server/checkout.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
 
 ### Vault API and Payment Method Tokens v3
 
 1. **Create a setup token.** Prova calls `POST /v3/vault/setup-tokens` for a PayPal wallet and binds the setup ID to an expiring signed ticket.
 2. **Obtain and verify consent.** The browser opens `createPayPalSavePaymentSession` in a modal. The server calls `GET /v3/vault/setup-tokens/{id}` and requires an approved setup before proceeding.
-3. **Exchange the setup token.** Prova calls `POST /v3/vault/payment-tokens` with the approved setup token and a request ID derived from its ID. It encrypts the resulting wallet reference in an HttpOnly cookie and can persist an encrypted shared Sandbox default. Checkout uses the token on a later purchase after proposal approval.
-4. **Revoke a saved wallet.** Removing the account calls `DELETE /v3/vault/payment-tokens/{id}` and clears the local wallet references.
+3. **Exchange the setup token.** Prova calls `POST /v3/vault/payment-tokens` with the approved setup token and a request ID derived from its ID. It persists the encrypted shared Sandbox wallet reference in PostgreSQL and also sets an HttpOnly wallet cookie. Shared checkout reads the database reference. Checkout uses the token on a later purchase after proposal approval.
+4. **Revoke a saved wallet.** Removing the account calls `DELETE /v3/vault/payment-tokens/{id}` and clears the database wallet reference and browser wallet cookie.
 
 [Vault service](lib/server/vault.ts) · [Organization settings](components/settings-dialog.tsx) · [PayPal consent return](app/paypal/save/route.ts)
 
@@ -129,7 +138,26 @@ The finance assistant is a conversational agent behind `POST /api/finance/chat`.
 | `prepare_invoice` | Validates the funding source and selected items, then prepares a review card with the amount and any requested sponsor notification. |
 | `prepare_refund` | Checks the original capture and available refundable amount, then prepares a review card for the requested refund. |
 
-Preparation produces a signed action token that binds the campaign, source, amount, operation ID and applicable invoice preferences for 15 minutes. The user confirms the card through a separate request. The browser persists the pending operation before confirmation, and the server revalidates the inputs and reuses PayPal request IDs so retries can recover an existing invoice or refund. Guided finance controls use the same confirmation path and remain available during a model outage. [Finance service](lib/server/finance.ts)
+Preparation produces a signed action token that binds the campaign, source, amount, operation ID and applicable invoice preferences for 15 minutes. The user confirms the card through a separate request. The workspace API persists pending operation metadata in PostgreSQL before confirmation, and the server revalidates the inputs and reuses PayPal request IDs so retries can recover an existing invoice or refund. Guided finance controls use the same confirmation path and remain available during a model outage. [Finance service](lib/server/finance.ts)
+
+## Shared workspace storage
+
+PostgreSQL stores settings, folders, campaign JSON documents, verified finance results, encrypted saved-wallet references, and checkout recovery records. Server routes load authoritative campaigns and serialize updates with transactions. Browser saves use record versions to reject conflicting edits. Only theme preferences remain in local storage. Run `pnpm db:setup` to migrate and seed an empty workspace; rerunning it preserves edits.
+
+
+## Authentication and deployment
+
+One team email and password are configured through server environment variables. Sign-in verifies them on the server and creates an expiring signed HttpOnly session cookie. The Next.js proxy protects dashboard, campaign, PayPal and API routes and checks the origin of browser mutations. This hackathon workspace has one shared identity; it does not implement individual accounts or organization isolation.
+
+Render hosts the Next.js Node service and managed PostgreSQL in the same region. The service connects using a server-only internal DATABASE_URL. API credentials and SESSION_SECRET remain in Render environment variables. APP_URL, or Render's automatic public URL, supplies the origin for HTTPS callbacks and request checks.
+
+The pre-deploy command applies versioned SQL migrations and seeds only an uninitialized workspace. Samples include a draft campaign, a proposal, and a synthetic completed purchase. Sample campaigns cannot initiate PayPal operations; create a new campaign for sandbox tools. Redeployments preserve edits. Existing browser workspaces are not automatically imported.
+
+See [deployment steps, environment variables, local setup, and demo reset](docs/render-deployment.md) and the [Render Blueprint](render.yaml).
+
+## Verification
+
+Run `pnpm typecheck`, `pnpm test:db`, and `pnpm build`. Database integration tests use embedded PostgreSQL (PGlite) and mocked PayPal HTTP responses to verify seed preservation, conflict rejection, retry recovery, capture persistence, authentication, and Render origin handling. A live deployment and sandbox payment still require the smoke test in the deployment guide.
 
 ## License
 
