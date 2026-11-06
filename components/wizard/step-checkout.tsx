@@ -48,7 +48,6 @@ export function StepCheckout({
   plan: Plan
   draft: Draft
   existingId?: string
-  prompt: string
   onPayingChange: (b: boolean) => void
   onPaymentComplete: (b: boolean) => void
   onBack: () => void

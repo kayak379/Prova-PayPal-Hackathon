@@ -46,7 +46,3 @@ export function paypalSDK(): Promise<SDK> {
   })
   return loading
 }
-
-export async function paypalVaultSDK(): Promise<SDK> {
-  return paypalSDK()
-}

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { inputClass, Label, Pressable } from './kit'
-import { paypalVaultSDK } from '@/lib/paypal-client'
+import { paypalSDK } from '@/lib/paypal-client'
 import { PayPalWordmark } from './brand'
 import { Modal } from './modal'
 import { LogoutButton } from './logout-button'
@@ -47,7 +47,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
     setWalletBusy(true)
     setWalletError('')
     try {
-      const sdk = await paypalVaultSDK()
+      const sdk = await paypalSDK()
       const setup = await vaultRequest('setup')
       const session = sdk.createPayPalSavePaymentSession({
         onApprove: async () => {

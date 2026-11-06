@@ -212,7 +212,6 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
                   plan={plan}
                   draft={draft}
                   existingId={existing?.id}
-                  prompt={prompt}
                   onPayingChange={setPaying}
                   onPaymentComplete={setPaymentComplete}
                   onBack={() => go(2)}

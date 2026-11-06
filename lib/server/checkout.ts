@@ -21,36 +21,39 @@ type Ticket = {
   totalCents: number
 }
 
-export async function createCheckout(body: any, origin: string) {
+type CheckoutInput = {
+  snapshot: string
+  campaignId: string
+  items: { id: string; qty: number }[]
+  attemptId?: string
+}
+
+export async function createCheckout(body: CheckoutInput, origin: string) {
   const prices = verify<Prices>(body.snapshot)
   if (prices.kind !== 'prices' || prices.expires < Date.now()) throw new Error('Proposal expired. Rebuild it before checkout.')
   if (typeof body.campaignId !== 'string' || !Array.isArray(body.items) || !body.items.length || body.items.length > 48) throw new Error('Invalid checkout items.')
   const used = new Set<string>()
-  const items = body.items.map((selection: any) => {
+  const items = body.items.map(selection => {
     const product = prices.products.find(p => p.id === selection.id)
     if (!product || used.has(product.id) || !Number.isSafeInteger(selection.qty) || selection.qty < 1 || selection.qty > 999999) throw new Error('Invalid product or quantity.')
     used.add(product.id)
     return { ...product, qty: selection.qty }
-  }) as PlanItem[]
+  })
   const totals = totalsCents(items)
   if (totals.total > prices.budgetCents || totals.total <= 0) throw new Error('Proposal exceeds the budget.')
 
   const returnUrl = `${origin}/campaigns/new?campaign=${encodeURIComponent(body.campaignId)}&payment=approved`
   const cancelUrl = `${origin}/campaigns/new?campaign=${encodeURIComponent(body.campaignId)}&payment=cancelled`
-  // Represent estimated tax as a separate line to avoid toolkit per-unit tax rounding differences.
+  // One-time checkout includes estimated tax as a separate item in item_total.
   const lines = items.map(p => ({
     name: p.name.slice(0, 127),
-    quantity: p.qty,
-    itemCost: p.unitPriceCents! / 100,
-    itemTotal: p.unitPriceCents! * p.qty / 100,
-    taxPercent: 0
+    quantity: String(p.qty),
+    unit_amount: { currency_code: 'USD', value: (p.unitPriceCents! / 100).toFixed(2) },
   }))
   if (totals.tax) lines.push({
     name: 'Estimated tax (sandbox)',
-    quantity: 1,
-    itemCost: totals.tax / 100,
-    itemTotal: totals.tax / 100,
-    taxPercent: 0
+    quantity: '1',
+    unit_amount: { currency_code: 'USD', value: (totals.tax / 100).toFixed(2) },
   })
 
   const wallet = await savedWallet()
@@ -82,13 +85,13 @@ export async function createCheckout(body: any, origin: string) {
             item_total: { currency_code: 'USD', value: ((totals.subtotal + totals.tax) / 100).toFixed(2) },
             shipping: { currency_code: 'USD', value: (totals.shipping / 100).toFixed(2) },
           } },
-          items: lines.map(p => ({ name: p.name, quantity: String(p.quantity), unit_amount: { currency_code: 'USD', value: p.itemCost.toFixed(2) } })),
+          items: lines,
           description: 'Prova sandbox demonstration. Retailer fulfillment simulated.',
         }],
         payment_source: { paypal: { experience_context: { return_url: returnUrl, cancel_url: cancelUrl, shipping_preference: 'NO_SHIPPING', user_action: 'PAY_NOW' } } },
       }, body.attemptId)
 
-  const approvalUrl = order.links?.find((link: any) => ['payer-action', 'approve'].includes(link.rel))?.href
+  const approvalUrl = order.links?.find((link: { rel: string; href: string }) => ['payer-action', 'approve'].includes(link.rel))?.href
   const requiresApproval = !['COMPLETED', 'APPROVED'].includes(order.status)
   if (!order.id || (requiresApproval && (!approvalUrl || new URL(approvalUrl).hostname !== 'www.sandbox.paypal.com'))) throw new Error('PayPal did not return a sandbox approval link.')
   return {
@@ -107,7 +110,7 @@ export async function createCheckout(body: any, origin: string) {
   }
 }
 
-export async function captureCheckout(body: any) {
+export async function captureCheckout(body: { ticket: string; orderId: string }) {
   const ticket = verify<Ticket>(body.ticket)
   if (ticket.kind !== 'payment' || ticket.orderId !== body.orderId) throw new Error('Invalid payment reference.')
   let order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId))
