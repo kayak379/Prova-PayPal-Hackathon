@@ -20,14 +20,6 @@ export const usdPrecise = (n: number) => currencyPrecise.format(n)
 export const uid = (prefix = '') =>
   `${prefix}${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`
 
-export const token = (prefix: string, len = 17) => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
-  let out = ''
-  for (let i = 0; i < len; i++)
-    out += chars[Math.floor(Math.random() * chars.length)]
-  return `${prefix}${out}`
-}
-
 export function planTotals(plan: Plan) {
   const subtotal = plan.items.reduce((s, i) => s + i.unitPrice * i.qty, 0)
   const total = subtotal + plan.shipping - plan.discount + plan.tax

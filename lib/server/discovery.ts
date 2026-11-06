@@ -85,6 +85,59 @@ function safeUrl(url: unknown) {
 
 type DiscoveryInput = { prompt: string; budget: number; feedback?: string; currentPlan?: Plan }
 
+type CatalogOffer = {
+  domain: string
+  url: string
+  availability?: string
+  price?: { currency: string; price: number }
+}
+
+type CatalogProduct = {
+  id: string
+  title: string
+  category?: { title?: string }
+  offers?: CatalogOffer[]
+  images?: { cleaned_url?: string; url?: string }[]
+}
+
+async function searchCatalog(query: string): Promise<PlanItem[]> {
+  const data = await external('https://api.trychannel3.com/v1/search', {
+    method: 'POST',
+    headers: { 'x-api-key': env('CHANNEL3_API_KEY'), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, limit: 8, filters: { availability: ['InStock'] } }),
+  })
+  const products: CatalogProduct[] = data.products || []
+  return products.slice(0, 8).flatMap(product => {
+    const offer = (product.offers || [])
+      .filter(offer =>
+        offer.price?.currency === 'USD'
+        && Number.isFinite(offer.price?.price)
+        && offer.price.price > 0
+        && offer.availability !== 'OutOfStock'
+        && !matches(String(offer.domain || '').toLowerCase(), excluded),
+      )
+      .sort((a, b) =>
+        Number(matches(String(b.domain || '').toLowerCase(), preferred))
+        - Number(matches(String(a.domain || '').toLowerCase(), preferred))
+        || a.price!.price - b.price!.price,
+      )[0]
+    if (!offer || !product.id || !safeUrl(offer.url)) return []
+    const cents = Math.round(offer.price!.price * 100)
+    return [{
+      id: product.id,
+      name: product.title,
+      category: product.category?.title || query,
+      supplier: offer.domain,
+      unitPrice: cents / 100,
+      unitPriceCents: cents,
+      qty: 1,
+      delivery: 'Delivery unverified',
+      productUrl: safeUrl(offer.url),
+      imageUrl: safeUrl(product.images?.[0]?.cleaned_url || product.images?.[0]?.url),
+    }]
+  })
+}
+
 export async function discover(body: DiscoveryInput, progress: (stage: number, detail: string) => void): Promise<Plan> {
   const providerState = { gemini: false }
   try {
@@ -185,42 +238,7 @@ async function discoverLive(
   progress(1, `Searching Channel3 for ${queries.length} supply categories`)
   const candidates: PlanItem[] = []
   for (let i = 0; i < queries.length; i += 3) {
-    const batches = await Promise.all(queries.slice(i, i + 3).map(async query => {
-      const data = await external('https://api.trychannel3.com/v1/search', {
-        method: 'POST',
-        headers: { 'x-api-key': env('CHANNEL3_API_KEY'), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, limit: 8, filters: { availability: ['InStock'] } })
-      })
-      return (data.products || []).slice(0, 8).flatMap((p: any) => {
-        const offer = (p.offers || [])
-          .filter((o: any) =>
-            o.price?.currency === 'USD'
-            && Number.isFinite(o.price?.price)
-            && o.price.price > 0
-            && o.availability !== 'OutOfStock'
-            && !matches(String(o.domain || '').toLowerCase(), excluded),
-          )
-          .sort((a: any, b: any) =>
-            Number(matches(String(b.domain || '').toLowerCase(), preferred))
-            - Number(matches(String(a.domain || '').toLowerCase(), preferred))
-            || a.price.price - b.price.price,
-          )[0]
-        if (!offer || !p.id || !safeUrl(offer.url)) return []
-        const cents = Math.round(offer.price.price * 100)
-        return [{
-          id: p.id,
-          name: p.title,
-          category: p.category?.title || query,
-          supplier: offer.domain,
-          unitPrice: cents / 100,
-          unitPriceCents: cents,
-          qty: 1,
-          delivery: 'Delivery unverified',
-          productUrl: safeUrl(offer.url),
-          imageUrl: safeUrl(p.images?.[0]?.cleaned_url || p.images?.[0]?.url)
-        }]
-      })
-    }))
+    const batches = await Promise.all(queries.slice(i, i + 3).map(searchCatalog))
     candidates.push(...batches.flat())
   }
   const unique = [...new Map([...candidates, ...preserved].map(p => [p.id, p])).values()]
