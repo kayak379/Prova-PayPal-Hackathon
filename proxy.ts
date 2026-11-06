@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { appOrigin } from './lib/server/origin'
 import { SESSION_COOKIE, validSession } from './lib/server/session'
+import { rateLimit } from './lib/server/rate-limit'
 
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
@@ -9,10 +10,18 @@ export function proxy(request: NextRequest) {
     if (request.headers.get('origin') !== appOrigin(request))
       return NextResponse.json({ error: 'Invalid request origin.' }, { status: 403 })
   }
-  if (path.startsWith('/api/auth/')) return NextResponse.next()
-  if (!validSession(request.cookies.get(SESSION_COOKIE)?.value)) {
+  if (!path.startsWith('/api/auth/') && !validSession(request.cookies.get(SESSION_COOKIE)?.value)) {
     if (path.startsWith('/api/')) return NextResponse.json({ error: 'Please sign in.' }, { status: 401 })
     return NextResponse.redirect(new URL('/login', appOrigin(request)))
+  }
+  if (path.startsWith('/api/')) {
+    const retryAfter = rateLimit(path)
+    if (retryAfter) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait before trying again.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
   }
   return NextResponse.next()
 }

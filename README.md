@@ -60,6 +60,8 @@ Browser workspace edits go through `/api/workspace`. Campaign and settings edits
 
 `DEMO_EMAIL` and `DEMO_PASSWORD` configure one shared team login. Sign-in issues a signed HttpOnly session cookie valid for 24 hours. The proxy protects dashboard, campaign, PayPal, and API routes; authentication routes are exempt from the session check. Browser mutations, including login and logout, require a matching origin. `APP_URL`, then `RENDER_EXTERNAL_URL`, then the request URL determines that origin. There are no individual accounts or organization boundaries.
 
+API requests have an in-memory fixed-window limit per server process: 120 requests per minute overall, 10 login attempts per minute, and 10 discovery/finance-chat requests per minute combined. Limits are shared across the team, return HTTP `429` with `Retry-After`, and reset on restart. Multiple server instances have independent limits. The proxy applies them before route execution; see [`rate-limit.ts`](lib/server/rate-limit.ts).
+
 ### Supply discovery
 
 `POST /api/discovery` streams newline-delimited JSON containing progress events and the final plan. The server directs the sequence:
