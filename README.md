@@ -135,19 +135,11 @@ After approval, `GET /v2/checkout/orders/{id}` retrieves the order and `POST /v2
 
 ### PayPal webhooks and missed-event recovery
 
-1. Run `pnpm db:setup` to apply migration `003_paypal_webhooks.sql`.
-2. In the **same sandbox REST app** used by `PAYPAL_CLIENT_ID`, register the HTTPS listener `https://your-domain/api/paypal/webhook`. Subscribe to `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`, `PAYMENT.REFUND.PENDING`, `PAYMENT.REFUND.FAILED`, and `INVOICING.INVOICE.PAID`. The handler also accepts `PAYMENT.REFUND.COMPLETED` if delivered. Set the registered listener's ID as the server-only `PAYPAL_WEBHOOK_ID` and restart the service. The project continues to use PayPal Sandbox.
-3. Run `pnpm paypal:reconcile` periodically from a scheduler with the same database and PayPal environment variables. This command retries up to 100 pending verified events, then polls all non-sample campaigns, including archived ones, for missed captures, refunds and invoice payments. It exits nonzero when checks remain unresolved. Repeated or concurrent runs are safe. Campaign **Reconcile** controls and the finance assistant perform the same resource checks within their existing database transaction.
+PayPal webhooks refresh completed captures, refunds and sponsor invoice payments. Prova verifies each signature and retrieves authoritative details from PayPal before updating financial records. Unique event IDs prevent duplicate processing, and database transactions commit financial updates and event completion together.
 
-The exact webhook POST endpoint bypasses browser session and Origin checks. It requires all PayPal transmission headers and calls PayPal's [signature verification endpoint](https://developer.paypal.com/api/webhooks/v1/verify-webhook-signature-post) with the configured webhook ID; missing or failed signatures are rejected before anything is persisted. Unsupported, correctly signed event types receive `200` without changing financial records.
+Failed events remain retryable. Manual reconciliation checks PayPal for missed updates and can recover completed purchases when the browser callback is lost. Pending invoice payments do not count as received funding.
 
-**A webhook is a trigger, never financial evidence.** Accepted events first enter the durable inbox. Processing fetches capture, refund or invoice details over authenticated PayPal REST calls, matches them to saved campaign references, and checks identifiers, exact USD amounts, currency and status. Refund ownership comes from the API's capture link, not the event payload. Invoice-paid notifications may represent partial or pending payments, so verified received funding follows the invoice resource and excludes pending or manually marked payments. No webhook payload amount is used in a receipt or balance.
-
-The event row and campaign row are locked during processing. Receipt/refund/invoice changes, checkout completion, audit entries, campaign version and event completion commit together. A unique event ID prevents duplicate processing; financial records also upsert by PayPal resource ID. Current details are fetched under the campaign lock so delayed notifications cannot overwrite newer local results with an old event status. API failures, mismatches, unknown references or database errors return `503`, leaving the inbox entry pending for PayPal redelivery or the reconciliation command. Invalid signatures or malformed bodies return `400`.
-
-Recovery only reads financial resources; it never captures an approved order, sends an invoice or creates a refund. A completed capture can be recovered from a saved checkout ticket even after the browser closes or the campaign is archived. Refunds discovered in order responses are individually retrieved and verified before affecting totals. Transaction Search remains supplementary and its reporting delay does not determine verification. Resources must be linked to a saved Prova checkout, purchase or invoice; unrelated merchant activity is left pending for investigation. Run the scheduler to recover events that were never delivered and to revisit pending payment statuses.
-
-[Webhook handler](lib/server/paypal-webhooks.ts) · [Reconciliation command](scripts/paypal-reconcile.ts) · [PayPal invoice event semantics](https://developer.paypal.com/platforms/invoicing/reference/invoicing-webhooks/)
+[Webhook handler](lib/server/paypal-webhooks.ts) · [Reconciliation](scripts/paypal-reconcile.ts)
 
 ## Finance assistant and approval boundary
 
