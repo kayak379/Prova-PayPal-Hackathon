@@ -10,6 +10,7 @@
     "db:setup": "tsx scripts/db-setup.ts",
     "db:reset": "tsx scripts/db-reset.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.cjs tests/*.test.mjs tests/*.test.ts",
     "test:db": "tsx --test tests/database.test.ts"
   },
   "dependencies": {

@@ -62,7 +62,7 @@ Checks:
 
 ~~~sh
 pnpm typecheck
-pnpm test:db
+pnpm test
 pnpm build
 ~~~
 
