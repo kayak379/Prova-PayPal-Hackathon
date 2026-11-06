@@ -18,6 +18,7 @@ function checkout(paypalRest, wallet = null) {
     './paypal': { paypalRest },
     './vault': { savedWallet: async () => wallet },
     '../money': load('lib/money.ts'),
+    './paypal-verification': load('lib/server/paypal-verification.ts'),
   })
 }
 const payment = () => ({
@@ -25,7 +26,7 @@ const payment = () => ({
   ticket: JSON.stringify({ kind: 'payment', orderId: 'order1', campaignId: 'campaign1', items: [{ supplier: 'Demo supplier' }], totalCents: 1234 }),
 })
 const paid = (value = '12.34', currency = 'USD', status = 'COMPLETED') => ({
-  status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ id: 'capture1', status, amount: { value, currency_code: currency } }] } }],
+  id: 'order1', status: 'COMPLETED', purchase_units: [{ payments: { captures: [{ id: 'capture1', status, amount: { value, currency_code: currency } }] } }],
 })
 
 for (const wallet of [null, { id: 'saved-wallet' }]) {
@@ -82,7 +83,7 @@ test('verified receipt preserves exact approved cents and retry returns the same
 
 test('amount mismatches, wrong currency and pending captures cannot produce a verified receipt', async () => {
   for (const result of [paid('12.35'), paid('12.34', 'EUR'), paid('12.34', 'USD', 'PENDING')]) {
-    await assert.rejects(checkout(async () => result).captureCheckout(payment()), /does not match|not completed/)
+    await assert.rejects(checkout(async () => result).captureCheckout(payment()), /does not match|not completed|could not be verified/)
   }
 })
 
@@ -91,7 +92,7 @@ test('capture timeout is recovered by retrieving authoritative payment status', 
   const api = checkout(async (path, method = 'GET', body, requestId) => {
     calls.push({ path, method, requestId })
     if (method === 'POST') throw new Error('Timeout after capture')
-    return calls.length === 1 ? { status: 'APPROVED' } : paid()
+    return calls.length === 1 ? { id: 'order1', status: 'APPROVED' } : paid()
   })
   const { receipt } = await api.captureCheckout(payment())
   assert.equal(receipt.paypalTxn, 'capture1')
@@ -104,4 +105,12 @@ test('capture timeout is recovered by retrieving authoritative payment status', 
 
 test('a different order cannot use the signed approval ticket', async () => {
   await assert.rejects(checkout(async () => { throw new Error('Must not call PayPal') }).captureCheckout({ ...payment(), orderId: 'other' }), /Invalid payment reference/)
+})
+
+test('a mismatched PayPal order response is rejected before attempting capture', async () => {
+  const api = checkout(async (_path, method = 'GET') => {
+    assert.equal(method, 'GET')
+    return { id: 'other', status: 'APPROVED' }
+  })
+  await assert.rejects(api.captureCheckout(payment()), /order reference mismatch/)
 })

@@ -46,6 +46,12 @@ Select the database plan you want in the dashboard and review its current limits
 
 Render supplies RENDER_EXTERNAL_URL automatically. If you add a custom domain, set APP_URL=https://your-domain.example and use that domain consistently when signing in and starting PayPal flows. This controls same-origin checks and callback URLs behind Render's HTTPS proxy.
 
+## PayPal webhook activation and reconciliation
+
+Register `https://prova-ddm2.onrender.com/api/paypal/webhook` in the same PayPal sandbox app used by the web service, and set `PAYPAL_WEBHOOK_ID` on that service. The web service's existing pre-deploy command applies the webhook inbox migration.
+
+The separate `render-reconciliation.yaml` Blueprint manages only the `prova-paypal-reconciliation` cron job. It runs `pnpm paypal:reconcile` every ten minutes in Ohio and references the existing `prova` service's database URL and PayPal credentials. No secrets are stored in the Blueprint. Sync this Blueprint again if those referenced values change. The cron job uses Render's smallest paid compute plan and is billed for active runtime with a $1 monthly minimum.
+
 ## Local development and checks
 
 Use Node 24 and the pinned pnpm version. Copy .env.example to .env.local and fill in its database, login, session, and provider values. For local PostgreSQL, use your local connection URL. To access a Render database from your computer, use its external URL with the TLS settings Render provides; internal URLs only work on Render's private network.

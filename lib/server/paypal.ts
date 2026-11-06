@@ -10,6 +10,7 @@ export async function paypalRest(
     `${env('PAYPAL_CLIENT_ID')}:${env('PAYPAL_CLIENT_SECRET')}`,
   ).toString('base64')
   const auth = await fetch('https://api-m.sandbox.paypal.com/v1/oauth2/token', {
+    cache: 'no-store',
     method: 'POST',
     headers: {
       Authorization: `Basic ${credentials}`,
@@ -21,6 +22,7 @@ export async function paypalRest(
   const token = await auth.json()
   if (!auth.ok) throw new Error('PayPal sandbox authentication failed.')
   const response = await fetch(`https://api-m.sandbox.paypal.com${path}`, {
+    cache: 'no-store',
     method,
     headers: {
       Authorization: `Bearer ${token.access_token}`,

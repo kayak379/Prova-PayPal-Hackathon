@@ -1,0 +1,29 @@
+# Separate Blueprint: only manages reconciliation; existing Prova resources are
+# referenced for configuration and remain managed independently.
+services:
+  - type: cron
+    name: prova-paypal-reconciliation
+    runtime: node
+    region: ohio
+    plan: 0.5c-512mb
+    schedule: "*/10 * * * *"
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false
+    startCommand: corepack pnpm paypal:reconcile
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: prova
+          envVarKey: DATABASE_URL
+      - key: PAYPAL_CLIENT_ID
+        fromService:
+          type: web
+          name: prova
+          envVarKey: PAYPAL_CLIENT_ID
+      - key: PAYPAL_CLIENT_SECRET
+        fromService:
+          type: web
+          name: prova
+          envVarKey: PAYPAL_CLIENT_SECRET

@@ -7,8 +7,11 @@ import type {
 } from '../types'
 import { priceCents, totalsCents } from '../money'
 import { sign, verify } from './common'
-import { paypal } from './paypal'
+import { paypal, paypalRest } from './paypal'
 import { invoiceQr } from './invoice-qr'
+import type { PoolClient } from 'pg'
+import { recoverCheckout } from './checkout-persistence'
+import { invoicePayment, refundDetails, usdCents } from './paypal-verification'
 const cents = (value: unknown) => Math.round(Number(value || 0) * 100)
 const money = (value: number) => ({
   currency_code: 'USD',
@@ -23,12 +26,12 @@ function reference(proof: string, campaignId: string, kind: string) {
 export async function orderDetails(c: Campaign, orderId: string) {
   const local = c.orders.find((o) => o.id === orderId)
   if (!local) throw new Error('Order is outside this campaign.')
-  const order = await paypal('get_order', { id: orderId })
+  const order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(orderId))
   const unit = order.purchase_units?.[0]
   const capture = unit?.payments?.captures?.find(
     (p: any) => p.id === local.paypalTxn,
   )
-  if (!capture || capture.amount.currency_code !== 'USD')
+  if (order.id !== orderId || !capture || capture.amount.currency_code !== 'USD')
     throw new Error('Capture could not be verified in PayPal.')
   const refunds = (unit.payments.refunds || []).map((r: any) => ({
     id: r.id,
@@ -274,7 +277,7 @@ export async function confirmFinance(c: Campaign, token: string) {
   // Replay the exact operation key even after a timeout; PayPal enforces idempotency.
   let refund: any
   for (const existing of state.refunds) {
-    const details = await paypal('get_refund', { refund_id: existing.id })
+    const details = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(existing.id))
     if (details.invoice_id === action.operationId) {
       refund = details
       break
@@ -294,14 +297,16 @@ export async function confirmFinance(c: Campaign, token: string) {
       action.operationId,
     )
   }
-  if (refund.id && !refund.amount)
-    refund = await paypal('get_refund', { refund_id: refund.id })
+  const refundId = refund.id
+  if (refundId)
+    refund = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(refundId))
   if (
     !refund.id ||
     refund.amount?.currency_code !== 'USD' ||
     cents(refund.amount.value) !== action.amountCents
   )
     throw new Error('Refund amount or currency was not confirmed by PayPal.')
+  refundDetails(refund, refundId, action.captureId, action.amountCents)
   const record: PurchaseRefund = {
     id: refund.id,
     operationId: action.operationId,
@@ -324,7 +329,8 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
   const local = (c.funding || []).find((f) => f.id === id)
   if (!local) throw new Error('Invoice outside campaign.')
   const ref = reference(local.proof, c.id, 'invoice')
-  let data = await paypal('get_invoice', { invoice_id: ref.id })
+  if (ref.id !== local.id) throw new Error('Invoice reference mismatch.')
+  let data = await paypalRest('/v2/invoicing/invoices/' + encodeURIComponent(ref.id))
   let emailRequestedAt = local.emailRequestedAt
   if (publish && data.status === 'DRAFT') {
     if (
@@ -345,9 +351,9 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
       `publish-${local.operationId}`,
     )
     if (ref.emailInvoice) emailRequestedAt = Date.now()
-    data = await paypal('get_invoice', { invoice_id: ref.id })
+    data = await paypalRest('/v2/invoicing/invoices/' + encodeURIComponent(ref.id))
   }
-  const paid = cents(data.payments?.paid_amount?.value)
+  const paid = invoicePayment(data, ref.id, ref.amountCents ?? local.amountCents)
   let qr = local.qr
   if (qr) {
     try {
@@ -356,10 +362,7 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
       qr = undefined
     }
   }
-  let error: string | undefined =
-    data.amount?.value && cents(data.amount.value) !== ref.amountCents
-      ? 'Invoice amount differs from the prepared funding request.'
-      : undefined
+  let error: string | undefined
   if (publish && data.status !== 'DRAFT') {
     try {
       const response = await paypal('generate_invoice_qr_code', {
@@ -377,7 +380,7 @@ export async function refreshInvoice(c: Campaign, id: string, publish = false) {
     emailInvoice: ref.emailInvoice === true,
     emailRequestedAt,
     status: data.status,
-    amountCents: cents(data.amount?.value) || local.amountCents,
+    amountCents: ref.amountCents ?? local.amountCents,
     receivedCents: paid,
     qr,
     paymentUrl:
@@ -392,15 +395,21 @@ export async function refreshRefund(c: Campaign, id: string) {
   const local = (c.refunds || []).find((r) => r.id === id)
   if (!local) throw new Error('Refund outside campaign.')
   const ref = reference(local.proof, c.id, 'refund')
-  const data = await paypal('get_refund', { refund_id: ref.id })
+  if (ref.id !== local.id || ref.captureId !== local.captureId || ref.orderId !== local.orderId)
+    throw new Error('Refund reference mismatch.')
+  const data = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(ref.id))
   return {
     ...local,
     status: data.status,
-    amountCents: cents(data.amount.value),
+    amountCents: refundDetails(data, ref.id, ref.captureId, local.amountCents),
   }
 }
-export async function reconcile(c: Campaign) {
+export async function reconcile(c: Campaign, client?: PoolClient) {
   const findings: string[] = []
+  if (client) {
+    try { await recoverCheckout(c, client) }
+    catch (error) { findings.push(`Checkout verification unavailable — ${error instanceof Error ? error.message : 'error'}`) }
+  }
   const refunds = [...(c.refunds || [])]
   const funding = [...(c.funding || [])]
   for (const order of c.orders) {
@@ -409,10 +418,17 @@ export async function reconcile(c: Campaign) {
       findings.push(
         `${order.id}: PayPal ${state.order.status}${cents(state.capture.amount.value) !== (order.totalCents ?? cents(order.total)) ? ' — amount mismatch' : ''}`,
       )
+      if (usdCents(state.capture.amount) !== (order.totalCents ?? cents(order.total)))
+        throw new Error('Capture amount mismatch.')
       for (const r of state.refunds) {
         const existing = refunds.findIndex((v) => v.id === r.id)
+        // Embedded order refunds are discovery hints. Fetch each refund before
+        // changing money totals; an unavailable detail lookup changes nothing.
+        const details = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(r.id))
         const record = {
-          ...r,
+          id: r.id,
+          status: details.status,
+          amountCents: refundDetails(details, r.id, state.capture.id, refunds[existing]?.amountCents),
           operationId: refunds[existing]?.operationId || r.id,
           orderId: order.id,
           captureId: state.capture.id,
@@ -449,12 +465,10 @@ export async function reconcile(c: Campaign) {
     }
   let reporting = 'Unavailable; direct resource checks shown above.'
   try {
-    const data = await paypal('list_transactions', {
+    const data = await paypalRest('/v1/reporting/transactions?' + new URLSearchParams({
       start_date: new Date(Date.now() - 30 * 86400000).toISOString(),
-      end_date: new Date().toISOString(),
-      page_size: 100,
-      page: 1,
-    })
+      end_date: new Date().toISOString(), page_size: '100', page: '1',
+    }))
     const ids = new Set(c.orders.map((o) => o.paypalTxn))
     const matches = (data.transaction_details || []).filter((t: any) =>
       ids.has(t.transaction_info?.transaction_id),

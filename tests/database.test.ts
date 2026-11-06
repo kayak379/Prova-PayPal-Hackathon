@@ -127,7 +127,7 @@ test('PostgreSQL workspace integration', async t => {
             captured = true
             return Response.json({ status: 'COMPLETED' })
           }
-          return Response.json({ status: captured ? 'COMPLETED' : 'APPROVED', purchase_units: [{ payments: { captures: captured ? [{ id: 'TEST_CAPTURE', status: 'COMPLETED', amount: { currency_code: 'USD', value: (pending.plan.items[0].unitPrice + pending.plan.shipping + pending.plan.tax).toFixed(2) } }] : [] } }] })
+          return Response.json({ id: 'TEST_ORDER', status: captured ? 'COMPLETED' : 'APPROVED', purchase_units: [{ payments: { captures: captured ? [{ id: 'TEST_CAPTURE', status: 'COMPLETED', amount: { currency_code: 'USD', value: (pending.plan.items[0].unitPrice + pending.plan.shipping + pending.plan.tax).toFixed(2) } }] : [] } }] })
         }
         const captureRequest = () => new Request('https://demo.example/api/checkout/capture', { method: 'POST', body: JSON.stringify({ orderId: pending.orderId, ticket: pending.ticket }) })
         const capture = await captureCheckout(captureRequest())

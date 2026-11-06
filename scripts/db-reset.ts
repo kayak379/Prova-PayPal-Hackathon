@@ -5,6 +5,7 @@ import { bootstrapWallet } from '../db/bootstrap-wallet'
 async function main() {
   if (!process.argv.includes('--confirm-reset')) throw new Error('This deletes ALL shared workspace campaigns, payment recovery records, and wallet references. Run with --confirm-reset only for an intentional demo reset.')
   await transaction(async client => {
+    await client.query('DELETE FROM paypal_webhook_events')
     await client.query('DELETE FROM payment_attempts')
     await client.query('DELETE FROM campaigns')
     await client.query('DELETE FROM workspace')

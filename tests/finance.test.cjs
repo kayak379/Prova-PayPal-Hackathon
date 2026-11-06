@@ -99,10 +99,18 @@ function setup(handler) {
     calls.push({ name, args, key })
     return handler(name, args, key)
   }
+  const paypalRest = (url) => {
+    const id = decodeURIComponent(url.split('/').pop())
+    if (url.startsWith('/v2/checkout/orders/')) return paypal('get_order', { id })
+    if (url.startsWith('/v2/invoicing/invoices/')) return paypal('get_invoice', { invoice_id: id })
+    if (url.startsWith('/v2/payments/refunds/')) return paypal('get_refund', { refund_id: id })
+    if (url.startsWith('/v1/reporting/transactions?')) return paypal('list_transactions', {})
+    throw new Error('Unexpected PayPal URL: ' + url)
+  }
   return {
     ...load('lib/server/finance.ts', {
       './common': common,
-      './paypal': { paypal, paypalRest: paypal },
+      './paypal': { paypal, paypalRest },
     }),
     calls,
   }
@@ -162,8 +170,9 @@ test('publication suppresses all email notifications and preserves invoice after
   const s = setup((name) => {
     if (name === 'get_invoice')
       return {
+        id: 'inv1',
         status: reads++ ? 'UNPAID' : 'DRAFT',
-        amount: { value: '4.00' },
+        amount: { currency_code: 'USD', value: '4.00' },
         detail: {
           metadata: {
             recipient_view_url:
@@ -226,6 +235,7 @@ test('refund confirmation uses exact cents, idempotency and deduplicates complet
           id: 'r1',
           status: 'COMPLETED',
           amount: { currency_code: 'USD', value: '2.00' },
+          links: [{ rel: 'up', href: 'https://api-m.sandbox.paypal.com/v2/payments/captures/capture1' }],
         },
   )
   const c = campaign()
@@ -432,6 +442,7 @@ test('minimal refund responses are hydrated before recording amounts', async () 
             id: 'r1',
             status: 'COMPLETED',
             amount: { currency_code: 'USD', value: '1.00' },
+            links: [{ rel: 'up', href: 'https://api-m.sandbox.paypal.com/v2/payments/captures/capture1' }],
           },
   )
   const c = campaign()
@@ -447,9 +458,10 @@ test('minimal refund responses are hydrated before recording amounts', async () 
 
 test('paid invoice records only verified received funding', async () => {
   const s = setup(() => ({
+    id: 'inv1',
     status: 'PAID',
-    amount: { value: '4.00' },
-    payments: { paid_amount: { value: '4.00' } },
+    amount: { currency_code: 'USD', value: '4.00' },
+    payments: { paid_amount: { currency_code: 'USD', value: '4.00' } },
   }))
   const c = campaign()
   c.funding = [
@@ -514,8 +526,9 @@ test('email publication notifies only the sponsor and does not resend after QR f
     if (name === 'create_invoice') return { id: 'inv-email' }
     if (name === 'get_invoice')
       return {
+        id: 'inv-email',
         status,
-        amount: { value: '4.00' },
+        amount: { currency_code: 'USD', value: '4.52' },
         primary_recipients: [
           { billing_info: { email_address: 'sponsor@example.com' } },
         ],
@@ -584,7 +597,7 @@ test('email remains opt-in even when an email is provided or browser records are
     name === 'create_invoice'
       ? { id: 'inv1' }
       : name === 'get_invoice'
-        ? { status: 'DRAFT' }
+        ? { id: 'inv1', status: 'DRAFT', amount: { currency_code: 'USD', value: '4.52' } }
         : {},
   )
   const c = campaign()

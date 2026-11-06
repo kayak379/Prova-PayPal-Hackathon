@@ -1,4 +1,5 @@
 import type { Campaign, FinanceAction } from '../types'
+import type { PoolClient } from 'pg'
 import { financeTotals } from '../finance'
 import { env, external } from './common'
 import { retryAI } from './ai-retry'
@@ -78,6 +79,7 @@ export async function financeChat(
   c: Campaign,
   text: string,
   history: { role: string; text: string }[] = [],
+  client?: PoolClient,
 ) {
   if (typeof text !== 'string' || !text.trim() || text.length > 4000)
     throw new Error('Enter a financial question under 4000 characters.')
@@ -134,12 +136,7 @@ export async function financeChat(
       }
       case 'invoice_status': {
         const funding = await refreshInvoice(c, args.id)
-        c = {
-          ...c,
-          funding: (c.funding || []).map((f) =>
-            f.id === funding.id ? funding : f,
-          ),
-        }
+        c.funding = (c.funding || []).map((f) => f.id === funding.id ? funding : f)
         patch.funding = c.funding
         return {
           id: funding.id,
@@ -149,12 +146,7 @@ export async function financeChat(
       }
       case 'refund_status': {
         const refund = await refreshRefund(c, args.id)
-        c = {
-          ...c,
-          refunds: (c.refunds || []).map((r) =>
-            r.id === refund.id ? refund : r,
-          ),
-        }
+        c.refunds = (c.refunds || []).map((r) => r.id === refund.id ? refund : r)
         patch.refunds = c.refunds
         return {
           id: refund.id,
@@ -163,9 +155,9 @@ export async function financeChat(
         }
       }
       case 'reconcile_campaign': {
-        const r = await reconcile(c)
+        const r = await reconcile(c, client)
         patch = { ...patch, ...r }
-        c = { ...c, ...r }
+        Object.assign(c, r)
         return { ...r.verification, totals: financeTotals(c) }
       }
       case 'prepare_invoice':

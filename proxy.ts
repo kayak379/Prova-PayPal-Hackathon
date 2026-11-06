@@ -5,6 +5,9 @@ import { rateLimit } from './lib/server/rate-limit'
 
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
+  // PayPal has no browser session or Origin header. This exact endpoint verifies
+  // every delivery with PayPal before it can write financial data.
+  if (path === '/api/paypal/webhook' && request.method === 'POST') return NextResponse.next()
   // Require same-origin browser mutations, including sign-in and sign-out.
   if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
     if (request.headers.get('origin') !== appOrigin(request))

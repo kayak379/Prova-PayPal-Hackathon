@@ -3,6 +3,7 @@ import { estimatedPlan, totalsCents } from '../money'
 import { sign, verify } from './common'
 import { savedWallet } from './vault'
 import { paypalRest } from './paypal'
+import { usdCents } from './paypal-verification'
 
 type Prices = {
   mock?: boolean
@@ -110,11 +111,12 @@ export async function createCheckout(body: CheckoutInput, origin: string) {
   }
 }
 
-export async function captureCheckout(body: { ticket: string; orderId: string }) {
+export async function captureCheckout(body: { ticket: string; orderId: string }, captureApproved = true) {
   const ticket = verify<Ticket>(body.ticket)
   if (ticket.kind !== 'payment' || ticket.orderId !== body.orderId) throw new Error('Invalid payment reference.')
   let order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId))
-  if (order.status === 'APPROVED') {
+  if (order.id !== ticket.orderId) throw new Error('PayPal order reference mismatch.')
+  if (captureApproved && order.status === 'APPROVED') {
     try {
       await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId) + '/capture', 'POST', {}, 'capture-' + ticket.orderId)
     } catch {
@@ -123,8 +125,12 @@ export async function captureCheckout(body: { ticket: string; orderId: string })
     order = await paypalRest('/v2/checkout/orders/' + encodeURIComponent(ticket.orderId))
   }
   const capture = order.purchase_units?.[0]?.payments?.captures?.[0]
-  if (order.status !== 'COMPLETED' || capture?.status !== 'COMPLETED') throw new Error('Payment is not completed. Approve it in PayPal, then retry verification.')
-  if (capture.amount?.currency_code !== 'USD' || Math.round(Number(capture.amount.value) * 100) !== ticket.totalCents) throw new Error('Payment amount does not match the approved proposal.')
+  // A missed callback may be recovered after the capture was already refunded.
+  if (order.id !== ticket.orderId || order.status !== 'COMPLETED' ||
+      order.purchase_units?.length !== 1 || order.purchase_units[0].payments?.captures?.length !== 1 ||
+      typeof capture?.id !== 'string' || !capture.id ||
+      !['COMPLETED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(capture?.status)) throw new Error('Payment is not completed. Approve it in PayPal, then retry verification.')
+  if (usdCents(capture.amount) !== ticket.totalCents) throw new Error('Payment amount does not match the approved proposal.')
   const receipt: Order = {
     id: ticket.orderId,
     paypalTxn: capture.id,

@@ -10,7 +10,7 @@ export const maxDuration = 300
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const result = await withCampaign(body.campaign?.id, async campaign => {
+    const result = await withCampaign(body.campaign?.id, async (campaign, client) => {
       if (campaign.demo) throw new Error('Sample campaign: create a new campaign to use payment tools.')
       let result: FinanceResult
       switch (body.action) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
           result = { refund: await refreshRefund(campaign, body.id) }
           break
         case 'reconcile':
-          result = await reconcile(campaign)
+          result = await reconcile(campaign, client)
           break
         default:
           throw new Error('Unknown operation.')
