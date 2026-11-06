@@ -78,7 +78,19 @@ test('PostgreSQL workspace integration', async t => {
       assert.equal(actual.funding, undefined)
       await assert.rejects(withCampaign(actual.id, async c => { c.name = 'Must roll back'; throw new Error('network failure') }))
       assert.notEqual((await workspace()).campaigns.find(c => c.id === actual.id)!.name, 'Must roll back')
-      await withCampaign(actual.id, async c => { applyFinance(c, { refund: { id: 'refund1', status: 'COMPLETED' } }); applyFinance(c, { refund: { id: 'refund1', status: 'COMPLETED' } }) })
+      const refund = {
+        id: 'refund1',
+        status: 'COMPLETED',
+        orderId: original.id,
+        captureId: original.paypalTxn,
+        amountCents: 100,
+        operationId: 'refund-operation',
+        proof: 'test-proof',
+      }
+      await withCampaign(actual.id, async c => {
+        applyFinance(c, { refund })
+        applyFinance(c, { refund })
+      })
       assert.equal((await workspace()).campaigns.find(c => c.id === actual.id)!.refunds!.length, 1)
     })
     await t.test('checkout persists a reusable attempt before network failure', async () => {

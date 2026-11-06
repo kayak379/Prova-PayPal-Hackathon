@@ -13,6 +13,8 @@ import {
 import type {
   Campaign,
   FinanceAction,
+  FinanceDraft,
+  FinanceResult,
   PurchaseRefund,
 } from '@/lib/types'
 import { financeTotals } from '@/lib/finance'
@@ -37,7 +39,7 @@ export function FinancePanel({
   mode: 'funding' | 'finance' | 'refund'
   refundOrderId?: string
 }) {
-  const { updateFinance, refresh, flush } = useStore()
+  const { saveFinanceDraft, refresh, flush } = useStore()
   const latest = useRef(campaign)
   latest.current = campaign
   const [busy, setBusy] = useState(false)
@@ -89,8 +91,8 @@ export function FinancePanel({
   const [orderId, setOrderId] = useState(
     refundOrderId || campaign.orders[0]?.id || '',
   )
-  async function persist(patch: Partial<Campaign>, message?: string) {
-    await updateFinance(latest.current.id, patch, message)
+  async function persist(patch: FinanceDraft) {
+    await saveFinanceDraft(latest.current.id, patch)
     latest.current = { ...latest.current, ...patch }
   }
   async function api(action: string, extra: object = {}, c = latest.current) {
@@ -123,9 +125,9 @@ export function FinancePanel({
       setBusy(false)
     }
   }
-  async function apply(data: any) {
+  function applyResult(data: FinanceResult) {
     const c = latest.current
-    const patch: any = {}
+    const patch: Partial<Pick<Campaign, 'funding' | 'refunds' | 'verification'>> = {}
     if (data.funding)
       patch.funding = Array.isArray(data.funding)
         ? data.funding
@@ -133,10 +135,11 @@ export function FinancePanel({
     if (data.refund) patch.refunds = upsert(c.refunds || [], data.refund)
     if (data.refunds) patch.refunds = data.refunds
     if (data.verification) patch.verification = data.verification
-    await persist(patch, 'PayPal financial records refreshed')
+    // The API already saved these records. Keep the local ref current for the next action.
+    latest.current = { ...c, ...patch }
   }
   async function publish(id: string) {
-    await apply(await api('invoice', { id, publish: true }))
+    applyResult(await api('invoice', { id, publish: true }))
   }
   async function confirm(action: FinanceAction) {
     const operations = latest.current.financeOperations || []
@@ -154,23 +157,18 @@ export function FinancePanel({
       }),
     })
     const result = await api('confirm', { token: action.token })
-    await apply(result)
-    await persist(
-      {
-        financeOperations: latest.current.financeOperations!.map((op) =>
-          op.id === action.operationId
-            ? {
-                ...op,
-                status: 'completed',
-                resultId: result.funding?.id || result.refund?.id,
-              }
-            : op,
-        ),
-      },
-      action.kind === 'invoice'
-        ? 'Sponsor invoice created'
-        : 'Purchase refund submitted',
-    )
+    applyResult(result)
+    await persist({
+      financeOperations: latest.current.financeOperations!.map((op) =>
+        op.id === action.operationId
+          ? {
+              ...op,
+              status: 'completed',
+              resultId: result.funding?.id || result.refund?.id,
+            }
+          : op,
+      ),
+    })
     setPrepared(null)
     if (result.funding) await publish(result.funding.id)
   }
@@ -220,7 +218,7 @@ export function FinancePanel({
       )
     }
     await refresh()
-    if (d.patch && Object.keys(d.patch).length) await apply(d.patch)
+    if (d.patch) applyResult(d.patch)
     await persist({
       financeMessages: [
         ...(latest.current.financeMessages || []),
@@ -270,7 +268,7 @@ export function FinancePanel({
         variant="secondary"
         disabled={busy}
         onClick={() =>
-          work(async () => apply(await api('refund', { id: refund.id })))
+          work(async () => applyResult(await api('refund', { id: refund.id })))
         }
       >
         Refresh refund status
@@ -676,7 +674,7 @@ export function FinancePanel({
                     size="sm"
                     onClick={() =>
                       work(async () =>
-                        apply(await api('invoice', { id: f.id })),
+                        applyResult(await api('invoice', { id: f.id })),
                       )
                     }
                   >
@@ -865,7 +863,7 @@ export function FinancePanel({
               className="mt-6"
               variant="secondary"
               disabled={busy}
-              onClick={() => work(async () => apply(await api('reconcile')))}
+              onClick={() => work(async () => applyResult(await api('reconcile')))}
             >
               Verify campaign finances
             </Pressable>

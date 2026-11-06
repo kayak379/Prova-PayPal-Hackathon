@@ -83,6 +83,37 @@ export type Campaign = {
   audit: AuditEntry[]
 }
 
+export type Workspace = {
+  settings: Settings
+  folders: Folder[]
+  campaigns: Campaign[]
+  version: number
+}
+
+export type CampaignDraft = Pick<Campaign, 'name' | 'folderId' | 'budget'> &
+  Partial<Pick<Campaign, 'taxId' | 'address'>>
+
+// Payment records are saved by server routes. Browser saves only conversation and review state.
+export type FinanceDraft = Pick<Campaign, 'financeMessages' | 'financeOperations'>
+
+export type WorkspaceCommand =
+  | { kind: 'folder'; entityId?: string; name: string }
+  | { kind: 'settings'; settings: Settings }
+  | { kind: 'create'; entityId?: string; draft: CampaignDraft }
+  | { kind: 'campaign'; id: string; changes: Pick<Campaign, 'name' | 'budget' | 'folderId'> }
+  | { kind: 'delete'; id: string }
+  | { kind: 'proposal'; id: string; request: string; proposal: Plan | null; attachment?: Campaign['requestAttachment'] }
+  | { kind: 'finance'; id: string; patch: FinanceDraft }
+  | { kind: 'audit'; id: string; entry: Omit<AuditEntry, 'id' | 'at'> }
+
+export type FinanceResult = {
+  prepared?: FinanceAction
+  funding?: FundingRequest | FundingRequest[]
+  refund?: PurchaseRefund
+  refunds?: PurchaseRefund[]
+  verification?: FinanceVerification
+}
+
 export type FundingRequest = {
   charges?: { subtotal: number; shipping: number; tax: number; total: number }
   emailInvoice?: boolean

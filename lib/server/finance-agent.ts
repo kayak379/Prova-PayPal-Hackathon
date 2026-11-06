@@ -83,7 +83,7 @@ export async function financeChat(
     throw new Error('Enter a financial question under 4000 characters.')
   const actions: FinanceAction[] = []
   const trace: { tool: string; summary: string }[] = []
-  let patch: any = {}
+  let patch: Pick<Campaign, 'funding' | 'refunds' | 'verification'> = {}
   let executions = 0
   let gemini = false
   const context = {
