@@ -15,7 +15,7 @@ export function usdCents(amount: any): number {
 export function linkedCapture(data: any): string | undefined {
   for (const link of data.links || []) {
     if (link.rel !== 'up' || typeof link.href !== 'string') continue
-    const match = /^https:\/\/api-m\.(?:sandbox\.)?paypal\.com\/v2\/payments\/captures\/([A-Za-z0-9]+)$/.exec(link.href)
+    const match = /^https:\/\/api(?:-m)?\.(?:sandbox\.)?paypal\.com\/v2\/payments\/captures\/([A-Za-z0-9]+)$/.exec(link.href)
     if (match) return match[1]
   }
 }

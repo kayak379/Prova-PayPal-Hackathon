@@ -34,6 +34,9 @@ test('refund identity and capture relationship come from exact API identifiers',
     { rel: 'up', href: 'https://api-m.sandbox.paypal.com/v2/payments/captures/C1' },
   ] }
   assert.equal(refundDetails(refund, 'R1', 'C1', 200), 200)
+  for (const host of ['api.sandbox.paypal.com', 'api.paypal.com', 'api-m.sandbox.paypal.com', 'api-m.paypal.com']) {
+    assert.equal(linkedCapture({ links: [{ rel: 'up', href: `https://${host}/v2/payments/captures/C1` }] }), 'C1')
+  }
   assert.throws(() => refundDetails(refund, 'R2', 'C1'))
   assert.throws(() => refundDetails(refund, 'R1', 'C2'))
   assert.throws(() => refundDetails(refund, 'R1', 'C1', 201))
