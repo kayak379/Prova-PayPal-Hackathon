@@ -887,7 +887,7 @@ export function FinancePanel({
           </Card>
           <Card className="flex min-w-0 flex-col overflow-hidden">
             <div className="flex items-center gap-3 px-5 pt-5 sm:px-6">
-              <FinanceMoney active={asking} />
+              <FinanceMoney />
               <h2 className="font-serif text-3xl tracking-tight">
                 Finance assistant
               </h2>

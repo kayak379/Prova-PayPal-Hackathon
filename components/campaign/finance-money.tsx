@@ -2,7 +2,7 @@
 
 const BILL = 'M10 20 C20 20 38 20 50 20 L50 41 C38 41 20 41 10 41 Z'
 
-export function FinanceMoney({ active }: { active: boolean }) {
+export function FinanceMoney() {
   return (
     <svg viewBox="0 0 64 64" className="size-14 shrink-0 text-brand" aria-hidden="true">
       <circle cx="32" cy="32" r="29" fill="var(--brand-soft)" />
@@ -11,8 +11,7 @@ export function FinanceMoney({ active }: { active: boolean }) {
           <g
             className="finance-bill-flutter"
             style={{
-              animationDuration: active ? '1.2s' : '2.2s',
-              animationDelay: `${-layer * 0.22}s`,
+              animationDelay: `${2 + layer * 0.12}s`,
             }}
           >
             <path
