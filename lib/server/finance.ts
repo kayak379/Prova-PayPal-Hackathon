@@ -166,7 +166,7 @@ export async function prepareFinance(
     title:
       payload.kind === 'invoice'
         ? `Funding request for ${payload.sponsor}`
-        : 'Refund sandbox purchase',
+        : 'Refund purchase',
     items: payload.items,
     charges: payload.charges,
     emailInvoice: payload.emailInvoice,

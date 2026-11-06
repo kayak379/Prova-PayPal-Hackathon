@@ -128,6 +128,19 @@ test('PostgreSQL workspace integration', async t => {
         assert.equal((await db.query<{ completed: boolean }>('SELECT completed FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows[0].completed, true)
       } finally { globalThis.fetch = originalFetch }
     })
+    await t.test('campaign deletion hides data while preserving payment records and late captures', async () => {
+      const c = (await workspace()).campaigns.find(c => c.name === 'Checkout test')!
+      const otherIds = (await workspace()).campaigns.filter(v => v.id !== c.id).map(v => v.id)
+      await assert.rejects(mutate({ kind: 'delete', id: c.id, version: c.version! - 1 }), Conflict)
+      await mutate({ kind: 'delete', id: c.id, version: c.version })
+      const after = await workspace()
+      assert.equal(after.campaigns.some(v => v.id === c.id), false)
+      assert.deepEqual(after.campaigns.map(v => v.id), otherIds)
+      await mutate({ kind: 'delete', id: c.id, version: c.version })
+      await assert.rejects(withCampaign(c.id, async () => {}), /Campaign not found/)
+      await withCampaign(c.id, async archived => { assert.equal(archived.orders.length, 1); assert.ok(archived.deletedAt) }, true)
+      assert.equal((await db.query('SELECT * FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows.length, 1)
+    })
     await t.test('login credentials, session cookies and logout', async () => {
       process.env.DEMO_EMAIL = 'team@example.com'; process.env.DEMO_PASSWORD = 'a-test-password'
       const request = (password: string) => new Request('https://demo.example/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'team@example.com', password }) })

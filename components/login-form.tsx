@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, Loader2 } from 'lucide-react'
+import { ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Card, inputClass, Label, Pressable } from './kit'
@@ -9,6 +9,7 @@ import { Card, inputClass, Label, Pressable } from './kit'
 export function LoginForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const [error, setError] = useState('')
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -36,7 +37,12 @@ export function LoginForm() {
           </div>
           <div>
             <Label htmlFor="password">Password</Label>
-            <input id="password" name="password" type="password" autoComplete="current-password" className={inputClass} required />
+            <div className="relative">
+              <input id="password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" className={inputClass + ' pr-12'} required />
+              <button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} aria-controls="password" onClick={() => setShowPassword(value => !value)} className="absolute inset-y-0 right-1 flex w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
           </div>
           <Pressable type="submit" size="lg" className="mt-2 w-full" disabled={loading}>
             <AnimatePresence mode="popLayout" initial={false}>

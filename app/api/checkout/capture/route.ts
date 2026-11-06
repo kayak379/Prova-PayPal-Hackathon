@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       c.audit.push({ id: crypto.randomUUID(), at: Date.now(), actor: 'paypal', message: 'Sandbox payment captured · ' + result.receipt.paypalTxn + ' · fulfillment simulated' })
       await client.query('UPDATE payment_attempts SET completed=true WHERE campaign_id=$1', [c.id])
       return result
-    })
+    }, true)
     return Response.json(result)
   } catch (error) { return Response.json({ error: message(error) }, { status: 400 }) }
 }

@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const b = await request.json()
     const result = await withCampaign(b.campaign?.id, async c => {
-      if (c.demo) throw new Error('Sample campaign: create a new campaign for PayPal sandbox operations.')
+      if (c.demo) throw new Error('Sample campaign: create a new campaign to use payment tools.')
       let result: any
       switch (b.action) {
         case 'prepare': result = { prepared: await prepareFinance(c, b.input) }; break

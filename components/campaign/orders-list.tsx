@@ -59,12 +59,8 @@ export function OrdersList({
             >
               <div className="min-w-0">
                 <p className="font-medium">
-                  {o.supplier}
-                  {o.mock && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      Mock data
-                    </span>
-                  )}
+                  {o.supplier.replace(/^Sandbox purchase/, 'Purchase')}
+
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {formatTime(o.createdAt)}

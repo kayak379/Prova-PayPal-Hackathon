@@ -6,7 +6,6 @@ import { useState } from 'react'
 import { Logo } from './brand'
 import { SettingsDialog } from './settings-dialog'
 import { useStore } from '@/lib/store'
-import { LogoutButton } from './logout-button'
 import { ThemeToggle } from './theme-toggle'
 
 export function TopBar({ children }: { children?: React.ReactNode }) {
@@ -20,7 +19,6 @@ export function TopBar({ children }: { children?: React.ReactNode }) {
         {children}
         <div className="flex items-center gap-1.5">
           <ThemeToggle />
-          <LogoutButton />
           <motion.span
             key={settings.orgName}
             initial={{ opacity: 0, y: 4 }}
@@ -43,7 +41,7 @@ export function TopBar({ children }: { children?: React.ReactNode }) {
               whileTap={{ scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 300, damping: 15 }}
               className="relative inline-flex size-9 items-center justify-center rounded-full text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Organization settings"
+              aria-label="Account settings"
             >
               <Settings2 className="size-4" />
             </motion.button>

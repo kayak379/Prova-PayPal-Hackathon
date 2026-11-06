@@ -42,7 +42,7 @@ export function FinancePanel({
   latest.current = campaign
   const [busy, setBusy] = useState(false)
   const workLock = useRef(false)
-  const [activity, setActivity] = useState('Checking PayPal sandbox…')
+  const [activity, setActivity] = useState('Checking PayPal…')
   const [error, setError] = useState('')
   const [prepared, setPrepared] = useState<FinanceAction | null>(null)
   const [source, setSource] = useState(
@@ -107,7 +107,7 @@ export function FinancePanel({
   }
   async function work(
     fn: () => Promise<void>,
-    detail = 'Checking PayPal sandbox…',
+    detail = 'Checking PayPal…',
   ) {
     if (workLock.current) return
     workLock.current = true
@@ -133,7 +133,7 @@ export function FinancePanel({
     if (data.refund) patch.refunds = upsert(c.refunds || [], data.refund)
     if (data.refunds) patch.refunds = data.refunds
     if (data.verification) patch.verification = data.verification
-    await persist(patch, 'PayPal sandbox financial records refreshed')
+    await persist(patch, 'PayPal financial records refreshed')
   }
   async function publish(id: string) {
     await apply(await api('invoice', { id, publish: true }))
@@ -168,8 +168,8 @@ export function FinancePanel({
         ),
       },
       action.kind === 'invoice'
-        ? 'Sponsor invoice created in sandbox'
-        : 'Purchase refund submitted in sandbox',
+        ? 'Sponsor invoice created'
+        : 'Purchase refund submitted',
     )
     setPrepared(null)
     if (result.funding) await publish(result.funding.id)
@@ -248,7 +248,7 @@ export function FinancePanel({
           : `Refund status: ${refund.status}`}
       </p>
       <p className="mt-2 text-xl tabular">
-        {dollars(refund.amountCents)} · Sandbox
+        {dollars(refund.amountCents)}
       </p>
       <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
         Refund: {refund.id}
@@ -302,7 +302,7 @@ export function FinancePanel({
         <p className="my-3 text-2xl font-medium tracking-tight tabular">
           {dollars(action.amountCents)}{' '}
           <span className="text-xs font-normal text-muted-foreground">
-            · PayPal sandbox
+            · PayPal
           </span>
         </p>
         {action.items?.map((p) => (
@@ -325,7 +325,7 @@ export function FinancePanel({
         <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
           {action.kind === 'invoice'
             ? `Includes estimated shipping and tax. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
-            : 'Refunds Prova’s sandbox payment; does not cancel a retailer order.'}
+            : 'Refunds the original payment; does not cancel a retailer order.'}
         </p>
         {action.kind === 'refund' && (
           <div className="mb-3 text-sm">
@@ -641,8 +641,7 @@ export function FinancePanel({
                   </p>
                 </div>
                 <p className="mt-3 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                  {f.status} · Received {dollars(f.receivedCents)} · Sandbox{' '}
-                  {f.mock ? '· Mock product data' : ''}
+                  {f.status} · Received {dollars(f.receivedCents)}
                 </p>
                 {f.paymentUrl && (
                   <a
@@ -712,7 +711,7 @@ export function FinancePanel({
                 Request a refund
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Review the amount before confirming a sandbox refund.
+                Review the amount before confirming a refund.
               </p>
             </div>
           </div>

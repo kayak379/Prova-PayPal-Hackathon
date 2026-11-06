@@ -175,7 +175,7 @@ export function StepCheckout({
   async function pay() {
     if (paymentLock.current) return
     paymentLock.current = true
-    setPaymentStage('Creating your sandbox payment…')
+    setPaymentStage('Creating your payment…')
     setBusy(true)
     setError('')
     onPayingChange(true)
@@ -255,18 +255,6 @@ export function StepCheckout({
           transition={{ duration: 0.2 }}
           className="flex flex-col gap-6"
         >
-          {plan.mock && (
-            <div
-              role="status"
-              className="rounded-xl border border-warning-border bg-warning p-4 text-sm text-warning-foreground"
-            >
-              <p className="font-semibold">Mock data — sandbox checkout</p>
-              <p>
-                Products and prices are sample data. PayPal will process a real
-                sandbox test transaction; no goods will be ordered.
-              </p>
-            </div>
-          )}
           {error && (
             <p role="alert" className="text-destructive">
               {error}
@@ -353,8 +341,8 @@ export function StepCheckout({
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {savedEmail
-                        ? 'Saved PayPal · Sandbox'
-                        : 'PayPal · Sandbox'}
+                        ? 'Saved PayPal'
+                        : 'PayPal'}
                     </p>
                   </div>
                 </div>
@@ -363,7 +351,7 @@ export function StepCheckout({
                   {usd(total)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  1 sandbox payment · fulfillment simulated
+                  One secure payment via PayPal
                 </p>
 
                 {phase === 'processing' ? (
@@ -438,12 +426,12 @@ function ApproveForm({
       className="flex flex-col gap-4"
     >
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Approve one PayPal sandbox payment of{' '}
+        Approve one PayPal payment of{' '}
         <span className="font-medium text-foreground tabular">
           {usd(total)}
         </span>{' '}
         for supplies from {count} {count === 1 ? 'retailer' : 'retailers'}.
-        Fulfillment is simulated; no goods will be ordered.
+        Review the amount and supplies before approving.
       </p>
       <div>
         <label
@@ -528,13 +516,8 @@ function Receipt({
           Payment verified
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          PayPal sandbox · Fulfillment simulated · No goods ordered
+          Your payment has been confirmed by PayPal.
         </p>
-        {orders.some((order) => order.mock) && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Mock product data · PayPal sandbox transaction · no goods ordered
-          </p>
-        )}
         <p className="mt-2 text-muted-foreground tabular">
           {usd(total)} · {orders.length}{' '}
           {orders.length === 1 ? 'order' : 'orders'} via PayPal
@@ -593,7 +576,7 @@ function Receipt({
               className="flex items-center justify-between gap-4 border-b border-border px-5 py-3.5 last:border-0"
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium">{o.supplier}</p>
+                <p className="text-sm font-medium">{o.supplier.replace(/^Sandbox purchase/, 'Purchase')}</p>
                 <p className="break-all font-mono text-xs text-muted-foreground">
                   Order: {o.id}
                   <br />

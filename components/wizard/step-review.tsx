@@ -67,12 +67,6 @@ export function StepReview({
 
   return (
     <div className="flex flex-col gap-6">
-      {plan.mock && (
-        <div role="status" className="rounded-xl border border-warning-border bg-warning p-4 text-sm text-warning-foreground">
-          <p className="font-semibold">Mock data — AI fallback</p>
-          <p className="mt-1">{plan.fallbackReason || 'These are sample products and prices, not live supplier offers.'}</p>
-        </div>
-      )}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {revision && revision.after === plan && <RevisionSummary before={revision.before} after={revision.after} request={revision.request} budget={budget} />}
       <div className="flex items-end justify-between gap-4">

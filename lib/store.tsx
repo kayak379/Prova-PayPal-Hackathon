@@ -15,6 +15,7 @@ type Store = Workspace & {
   addCampaign: (draft: Omit<Campaign, 'id' | 'createdAt' | 'orders' | 'audit'>) => Promise<Campaign>
   addOrders: (id: string, orders: Order[], audit: Omit<AuditEntry, 'id'>[]) => Promise<void>
   updateCampaign: (id: string, changes: Pick<Campaign, 'name' | 'budget' | 'folderId'>) => Promise<void>
+  deleteCampaign: (id: string) => Promise<void>
   logAudit: (id: string, entry: Omit<AuditEntry, 'id' | 'at'>) => Promise<void>
 }
 const StoreContext = createContext<Store | null>(null)
@@ -63,11 +64,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addCampaign: draft => mutate({ kind: 'create', draft }),
     addOrders: async () => { await refresh() },
     updateCampaign: async (id, changes) => { await mutate({ kind: 'campaign', id, changes }) },
+    deleteCampaign: async id => { await mutate({ kind: 'delete', id }) },
     logAudit: async (id, entry) => { await mutate({ kind: 'audit', id, entry }) },
   }), [data, hydrated, refresh, flush, saveProposal, mutate])
   return <StoreContext.Provider value={value}>
     {protectedPage && error && <div role="alert" className="bg-destructive/10 p-3 text-center text-sm">{error} <button className="underline" onClick={() => { void (failed.current ? failed.current() : refresh()).catch(e => setError(e.message)) }}>Retry</button></div>}
-    {protectedPage && hydrated && <p className="bg-muted px-4 py-2 text-center text-xs">Shared demo workspace · Sample campaigns contain synthetic data. Create a new campaign for PayPal sandbox tools.</p>}
     {protectedPage && !hydrated ? <p className="p-10">Loading workspace…</p> : children}
   </StoreContext.Provider>
 }

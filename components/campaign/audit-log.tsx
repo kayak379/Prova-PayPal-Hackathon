@@ -32,7 +32,7 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
               <span className="sr-only">{a.label}</span>
             </span>
             <div className="min-w-0 pt-1">
-              <p className="text-sm leading-relaxed">{e.message}</p>
+              <p className="text-sm leading-relaxed">{e.message.replace(/\bsandbox\s*/gi, '').replace(/\s*·\s*fulfillment simulated/gi, '')}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {a.label} · {formatTime(e.at)}
               </p>

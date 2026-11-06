@@ -61,7 +61,7 @@ export function Modal({
             exit={layoutId ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
             style={{ borderRadius: 24 }}
             className={cn(
-              'relative w-full max-w-md overflow-hidden bg-card shadow-2xl',
+              'relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto bg-card shadow-2xl',
               className,
             )}
           >

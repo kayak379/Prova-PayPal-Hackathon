@@ -125,7 +125,7 @@ export async function captureCheckout(body: any) {
   const receipt: Order = {
     id: ticket.orderId,
     paypalTxn: capture.id,
-    supplier: 'Sandbox purchase · ' + new Set(ticket.items.map(p => p.supplier)).size + ' retailers',
+    supplier: 'Purchase · ' + new Set(ticket.items.map(p => p.supplier)).size + ' retailers',
     items: ticket.items,
     total: ticket.totalCents / 100,
     totalCents: ticket.totalCents,

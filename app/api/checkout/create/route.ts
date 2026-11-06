@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     // Commit the idempotency key before calling PayPal, so a timeout cannot lose it.
     await transaction(async client => {
       const c = await campaign(client, b.campaignId)
-      if (c.demo) throw new Error('Sample campaign: create a new campaign for sandbox checkout.')
+      if (c.demo) throw new Error('Sample campaign: create a new campaign to proceed to checkout.')
       await client.query('INSERT INTO payment_attempts(campaign_id,attempt_id) VALUES($1,$2) ON CONFLICT(campaign_id) DO UPDATE SET attempt_id=EXCLUDED.attempt_id,data=NULL,completed=false WHERE payment_attempts.completed=true', [c.id, crypto.randomUUID()])
     })
     const result = await withCampaign(b.campaignId, async (c, client) => {

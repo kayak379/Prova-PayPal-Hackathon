@@ -7,11 +7,12 @@ import { inputClass, Label, Pressable } from './kit'
 import { paypalVaultSDK } from '@/lib/paypal-client'
 import { PayPalWordmark } from './brand'
 import { Modal } from './modal'
+import { LogoutButton } from './logout-button'
 import { useStore } from '@/lib/store'
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Modal open={open} onClose={onClose} layoutId="settings-surface" title="Organization">
+    <Modal open={open} onClose={onClose} layoutId="settings-surface" title="Account settings">
       <SettingsForm onClose={onClose} />
     </Modal>
   )
@@ -67,7 +68,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
         },
         onError: () => {
           setWalletBusy(false)
-          setWalletError('PayPal could not save this account. Check that Vault is enabled for your sandbox app.')
+          setWalletError('PayPal could not save this account. Please try again or contact support.')
         }
       })
       await session.start({ presentationMode: 'modal' }, Promise.resolve({ vaultSetupToken: setup.vaultSetupToken }))
@@ -121,7 +122,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div className="rounded-2xl border border-paypal-blue/20 bg-paypal-blue/5 p-4">
-        <div className="mb-3 flex items-center justify-between"><PayPalWordmark className="text-2xl" /><span className="text-xs text-paypal-wordmark-navy">Sandbox</span></div>
+        <div className="mb-3 flex items-center justify-between"><PayPalWordmark className="text-2xl" /><span className="text-xs text-paypal-wordmark-navy">{wallet.saved ? 'Connected' : 'Not connected'}</span></div>
         <p className="mb-1 truncate text-sm font-medium">{wallet.saved ? wallet.email : 'No PayPal account saved'}</p>
         <p className="mb-4 text-xs text-muted-foreground">{wallet.saved ? 'Saved securely with PayPal for purchases you approve in Prova.' : 'Save your PayPal account once for faster future purchases. No payment is taken when saving.'}</p>
         <button type="button" disabled={walletBusy} onClick={savePayPal} className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-paypal-gold text-sm font-semibold text-paypal-navy disabled:opacity-50">{walletBusy ? 'Connecting to' : wallet.saved ? 'Change saved' : 'Save'} <PayPalWordmark className="[--paypal-wordmark-navy:#003087] [--paypal-wordmark-blue:#00539c]" /></button>
@@ -142,6 +143,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
           )}
         </AnimatePresence>
       </Pressable>
+      <div className="mt-2 border-t border-border pt-4"><LogoutButton /></div>
     </form>
   )
 }

@@ -201,7 +201,7 @@ export function CampaignDetail({ id }: { id: string }) {
                 </div>
               </div>
               <span className="text-xs text-muted-foreground">
-                PayPal sandbox · Simulated fulfillment
+                Payments powered by PayPal
               </span>
             </div>
           )}

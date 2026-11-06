@@ -7,11 +7,11 @@ export class Conflict extends Error {}
 export async function workspace(): Promise<Workspace> {
   const result = await database().query("SELECT settings, folders, version FROM workspace WHERE id='demo'")
   if (!result.rows[0]) throw new Error('Run database setup before starting the app.')
-  const campaigns = await database().query("SELECT data, version FROM campaigns ORDER BY (data->>'createdAt')::bigint DESC")
+  const campaigns = await database().query("SELECT data, version FROM campaigns WHERE NOT (data ? 'deletedAt') ORDER BY (data->>'createdAt')::bigint DESC")
   return { ...result.rows[0], campaigns: campaigns.rows.map(row => ({ ...row.data, version: row.version })) }
 }
-export async function campaign(client: PoolClient, id: string): Promise<Campaign> {
-  const result = await client.query('SELECT data, version FROM campaigns WHERE id=$1 FOR UPDATE', [id])
+export async function campaign(client: PoolClient, id: string, includeDeleted = false): Promise<Campaign> {
+  const result = await client.query("SELECT data, version FROM campaigns WHERE id=$1 AND ($2::boolean OR NOT (data ? 'deletedAt')) FOR UPDATE", [id, includeDeleted])
   if (!result.rows[0]) throw new Error('Campaign not found.')
   return { ...result.rows[0].data, version: result.rows[0].version }
 }
@@ -19,9 +19,9 @@ export async function saveCampaign(client: PoolClient, c: Campaign) {
   const { version, ...data } = c
   await client.query('UPDATE campaigns SET data=$2, version=version+1 WHERE id=$1', [c.id, JSON.stringify(data)])
 }
-export async function withCampaign<T>(id: string, work: (c: Campaign, client: PoolClient) => Promise<T>) {
+export async function withCampaign<T>(id: string, work: (c: Campaign, client: PoolClient) => Promise<T>, includeDeleted = false) {
   return transaction(async client => {
-    const c = await campaign(client, id)
+    const c = await campaign(client, id, includeDeleted)
     const result = await work(c, client)
     await saveCampaign(client, c)
     return result
@@ -60,9 +60,13 @@ export async function mutate(input: any) {
       await client.query('INSERT INTO campaigns(id,data) VALUES($1,$2)', [c.id, JSON.stringify(c)])
       entity = c
     } else {
-      const c = await campaign(client, text(input.id))
+      const c = await campaign(client, text(input.id), input.kind === 'delete')
+      if (input.kind === 'delete' && c.deletedAt) return
       if (input.version !== c.version) throw new Conflict('Campaign changed in another browser. Reload and try again.')
-      if (input.kind === 'campaign') Object.assign(c, fields(input.changes, row.folders, campaignSpent(c)))
+      if (input.kind === 'delete') {
+        c.deletedAt = Date.now()
+        c.audit.push({ id: crypto.randomUUID(), at: Date.now(), actor: 'user', message: 'Campaign deleted from workspace' })
+      } else if (input.kind === 'campaign') Object.assign(c, fields(input.changes, row.folders, campaignSpent(c)))
       else if (input.kind === 'proposal') {
         if (typeof input.request !== 'string' || input.request.length > 100000) throw new Error('Invalid request.')
         if (input.proposal && (!Array.isArray(input.proposal.items) || input.proposal.items.length > 48)) throw new Error('Invalid proposal.')

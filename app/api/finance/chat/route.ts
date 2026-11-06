@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const b = await request.json()
     const result = await withCampaign(b.campaign?.id, async c => {
-      if (c.demo) throw new Error('Sample campaign: create a new campaign to use live finance tools.')
+      if (c.demo) throw new Error('Sample campaign: create a new campaign to use finance tools.')
       const history = c.financeMessages || []
       const last = history.at(-1)
       // The browser saves the user's message before requesting a reply.
