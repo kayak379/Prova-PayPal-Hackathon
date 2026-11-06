@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
+import { bootstrapWallet } from '../db/bootstrap-wallet'
+import { sealWallet, openWallet } from '../lib/server/wallet-crypto'
 import { seed } from '../db/seed'
 import { mutate, workspace, withCampaign, Conflict } from '../lib/server/workspace'
 import { newSession, validSession, SESSION_COOKIE } from '../lib/server/session'
@@ -26,6 +28,7 @@ test('PostgreSQL workspace integration', async t => {
   const client = { query, release() {} }
   ;(globalThis as unknown as { provaPool: Pool }).provaPool = { query, connect: async () => client } as unknown as Pool
   await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'))
+  await db.exec(await readFile('db/migrations/002_wallet_bootstrap.sql', 'utf8'))
   try {
     await t.test('seed once and preserve edits on repeated deployment', async () => {
       await seed(client as any)
@@ -37,6 +40,17 @@ test('PostgreSQL workspace integration', async t => {
       assert.equal(w.settings.orgName, 'Our demo team')
       assert.equal(w.campaigns.length, 3)
       assert.ok(w.campaigns.every(c => c.demo))
+    })
+    await t.test('preapproved wallet imports once and respects disconnects', async () => {
+      const secret = process.env.PAYPAL_CLIENT_SECRET!
+      const encrypted = sealWallet({ id: 'sandbox-token-fixture', email: 'buyer@example.com' }, secret)
+      await assert.rejects(bootstrapWallet(client as any, 'bad-token', secret))
+      await bootstrapWallet(client as any, encrypted, secret)
+      let row = (await db.query<{ wallet: string; wallet_bootstrapped: boolean }>("SELECT wallet,wallet_bootstrapped FROM workspace WHERE id='demo'")).rows[0]
+      assert.equal(openWallet(row.wallet, secret).email, 'buyer@example.com'); assert.equal(row.wallet_bootstrapped, true)
+      await db.query("UPDATE workspace SET wallet=NULL WHERE id='demo'")
+      await bootstrapWallet(client as any, encrypted, secret)
+      assert.equal((await db.query<{wallet:string|null}>("SELECT wallet FROM workspace WHERE id='demo'")).rows[0].wallet, null)
     })
     await t.test('create, update, reject stale edits and invalid budgets', async () => {
       const draft = { name: 'Live test', budget: 3000, folderId: 'f_hurricane', taxId: 'test', address: 'Shelter' }

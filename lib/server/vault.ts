@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { sealWallet, openWallet, type SavedWallet } from './wallet-crypto'
 import { cookies } from 'next/headers'
 import { database } from './db'
 import { env, sign, verify } from './common'
@@ -6,29 +6,15 @@ import { paypalRest } from './paypal'
 
 const COOKIE = 'prova-paypal-vault'
 
-type SavedWallet = { id: string; email: string; customerId?: string }
-const key = () => createHash('sha256').update(env('PAYPAL_CLIENT_SECRET') + ':vault-cookie').digest()
-
-function seal(wallet: SavedWallet) {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', key(), iv)
-  const encrypted = Buffer.concat([cipher.update(JSON.stringify(wallet), 'utf8'), cipher.final()])
-  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url')
-}
-
 async function setDefaultWallet(wallet: SavedWallet | null) {
-  await database().query("UPDATE workspace SET wallet=$1 WHERE id='demo'", [wallet ? seal(wallet) : null])
+  await database().query("UPDATE workspace SET wallet=$1 WHERE id='demo'", [wallet ? sealWallet(wallet, env('PAYPAL_CLIENT_SECRET')) : null])
 }
 
 export async function savedWallet(): Promise<SavedWallet | null> {
   const value = (await database().query("SELECT wallet FROM workspace WHERE id='demo'")).rows[0]?.wallet
   if (!value) return null
   try {
-    const bytes = Buffer.from(value, 'base64url')
-    const decipher = createDecipheriv('aes-256-gcm', key(), bytes.subarray(0, 12))
-    decipher.setAuthTag(bytes.subarray(12, 28))
-    const wallet: SavedWallet = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString())
-    return wallet
+    return openWallet(value, env('PAYPAL_CLIENT_SECRET'))
   } catch {
     return null
   }
@@ -78,7 +64,7 @@ export async function finishWallet(ticket: string, secure: boolean) {
   }
   await setDefaultWallet(wallet)
   const jar = await cookies()
-  jar.set(COOKIE, seal(wallet), { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 86400 * 30 })
+  jar.set(COOKIE, sealWallet(wallet, env('PAYPAL_CLIENT_SECRET')), { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 86400 * 30 })
   jar.delete('prova-paypal-setup')
   return { saved: true, email: wallet.email }
 }

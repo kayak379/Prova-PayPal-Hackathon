@@ -151,7 +151,7 @@ One team email and password are configured through server environment variables.
 
 Render hosts the Next.js Node service and managed PostgreSQL in the same region. The service connects using a server-only internal DATABASE_URL. API credentials and SESSION_SECRET remain in Render environment variables. APP_URL, or Render's automatic public URL, supplies the origin for HTTPS callbacks and request checks.
 
-The pre-deploy command applies versioned SQL migrations and seeds only an uninitialized workspace. Samples include a draft campaign, a proposal, and a synthetic completed purchase. Sample campaigns cannot initiate PayPal operations; create a new campaign for sandbox tools. Redeployments preserve edits. Existing browser workspaces are not automatically imported.
+The pre-deploy command applies versioned SQL migrations and seeds only an uninitialized workspace. An optional encrypted PAYPAL_DEFAULT_VAULT_WALLET secret imports the previously approved sandbox wallet once, so the shared demo starts with PayPal connected. Deliberate disconnects are preserved across redeploys. Samples include a draft campaign, a proposal, and a synthetic completed purchase. Sample campaigns cannot initiate PayPal operations; create a new campaign for sandbox tools. Redeployments preserve edits. Existing browser workspaces are not automatically imported.
 
 See [deployment steps, environment variables, local setup, and demo reset](docs/render-deployment.md) and the [Render Blueprint](render.yaml).
 

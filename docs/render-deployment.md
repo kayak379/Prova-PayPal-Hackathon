@@ -24,7 +24,7 @@ The Blueprint connects DATABASE_URL to the database's internal connection string
 5. Create the resources. The build installs dependencies and builds Next.js. The pre-deploy command runs pnpm db:setup to apply migrations and seed only an uninitialized workspace. The start command listens on Render's assigned PORT.
 6. Open the web service URL, visit /login, and sign in with DEMO_EMAIL and DEMO_PASSWORD. You should see all three sample campaigns.
 7. Create a new campaign, reload, and sign in from a second browser to verify shared persistence. Restart the web service and confirm the campaign remains.
-8. For a PayPal walkthrough, create a **new campaign**, generate a proposal, and use a sandbox buyer account. Sample campaigns and synthetic purchase IDs cannot initiate PayPal operations. Vault is optional; reconnect the sandbox wallet from Organization settings after deployment if desired. Existing browser wallet cookies and local campaigns are not imported.
+8. For a PayPal walkthrough, create a **new campaign**, generate a proposal, and use a sandbox buyer account. Sample campaigns and synthetic purchase IDs cannot initiate PayPal operations. The demo can preload an already-approved sandbox wallet: set PAYPAL_DEFAULT_VAULT_WALLET to the encrypted reference from the local setup, using the same PAYPAL_CLIENT_SECRET. The next pre-deploy imports it into PostgreSQL once and fills the organization PayPal email. Subsequent redeploys preserve wallet changes and do not reconnect a deliberately removed wallet. Keep this reference in Render secrets, never source control. Existing local campaigns are not imported.
 
 ## Manual setup or an existing Render service
 
