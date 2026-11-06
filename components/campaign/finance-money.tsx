@@ -3,13 +3,14 @@
 import { motion, useReducedMotion } from 'motion/react'
 
 const REST = 'M10 20 C20 20 38 20 50 20 L50 41 C38 41 20 41 10 41 Z'
-const LIFT = 'M10 20 C20 22 38 13 50 17 L50 38 C38 34 20 43 10 41 Z'
-const DIP = 'M10 20 C20 19 38 24 50 22 L50 43 C38 45 20 40 10 41 Z'
+const LIFT = 'M10 20 C20 25 38 9 50 14 L50 35 C38 30 20 46 10 41 Z'
+const DIP = 'M10 20 C20 16 38 28 50 24 L50 45 C38 49 20 37 10 41 Z'
 
 export function FinanceMoney({ active }: { active: boolean }) {
   const reduced = useReducedMotion()
   const flutter = {
-    duration: active ? 2.6 : 4,
+    type: 'tween' as const,
+    duration: active ? 1.6 : 2.8,
     times: [0, 0.34, 0.52, 0.7, 1],
     ease: 'easeInOut' as const,
     repeat: reduced ? 0 : Infinity,
@@ -27,7 +28,11 @@ export function FinanceMoney({ active }: { active: boolean }) {
           <motion.path
             d={REST}
             initial={false}
-            animate={{ d: reduced ? REST : [REST, LIFT, DIP, REST, REST] }}
+            animate={{
+              d: reduced ? REST : [REST, LIFT, DIP, REST, REST],
+              y: reduced ? 0 : [0, -layer * 1.5, layer * 0.5, 0, 0],
+              rotate: reduced ? 0 : [0, -layer * 2, layer, 0, 0],
+            }}
             transition={{
               ...flutter,
               times: [0, 0.34 + layer * 0.035, 0.52 + layer * 0.035, 0.7 + layer * 0.035, 1],
@@ -39,34 +44,44 @@ export function FinanceMoney({ active }: { active: boolean }) {
           />
         </g>
       ))}
-      <motion.path
-        d={REST}
-        initial={false}
-        animate={{ d: reduced ? REST : [REST, LIFT, DIP, REST, REST] }}
-        transition={flutter}
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
       <motion.g
         initial={false}
-        animate={{ y: reduced ? 0 : [0, -2, 1.5, 0, 0] }}
+        animate={{
+          y: reduced ? 0 : [0, -3, 1, 0, 0],
+          rotate: reduced ? 0 : [0, -4, 2, 0, 0],
+        }}
+        style={{ transformOrigin: '10px 31px' }}
         transition={flutter}
-        fill="none"
-        stroke="var(--brand-foreground)"
-        strokeLinecap="round"
       >
-        <ellipse cx="30" cy="30.5" rx="7" ry="8" strokeOpacity=".45" />
-        <path
-          d="M33 27 H29 A1.75 1.75 0 0 0 29 30.5 H31 A1.75 1.75 0 0 1 31 34 H27 M30 25 V36"
-          strokeWidth="1.4"
+        <motion.path
+          d={REST}
+          initial={false}
+          animate={{ d: reduced ? REST : [REST, LIFT, DIP, REST, REST] }}
+          transition={flutter}
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
         />
-        <path
-          d="M15 28 V25 H19 M41 36 H45 V33"
-          strokeOpacity=".55"
-          strokeWidth="1.2"
-        />
+        <motion.g
+          initial={false}
+          animate={{ y: reduced ? 0 : [0, -2, 1.5, 0, 0] }}
+          transition={flutter}
+          fill="none"
+          stroke="var(--brand-foreground)"
+          strokeLinecap="round"
+        >
+          <ellipse cx="30" cy="30.5" rx="7" ry="8" strokeOpacity=".45" />
+          <path
+            d="M33 27 H29 A1.75 1.75 0 0 0 29 30.5 H31 A1.75 1.75 0 0 1 31 34 H27 M30 25 V36"
+            strokeWidth="1.4"
+          />
+          <path
+            d="M15 28 V25 H19 M41 36 H45 V33"
+            strokeOpacity=".55"
+            strokeWidth="1.2"
+          />
+        </motion.g>
       </motion.g>
     </svg>
   )

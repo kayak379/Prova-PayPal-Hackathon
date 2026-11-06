@@ -25,6 +25,7 @@ import { Card, Pressable, inputClass, Label } from '../kit'
 import { FundingGraphic } from './funding-graphic'
 import { FinanceMoney } from './finance-money'
 import { PayPalWordmark } from '../brand'
+import { FundingReview } from './funding-review'
 const dollars = (c: number) => usdPrecise(c / 100)
 const upsert = <T extends { id: string }>(list: T[], item: T) => [
   ...list.filter((i) => i.id !== item.id),
@@ -1059,7 +1060,25 @@ export function FinancePanel({
           </Card>
         </div>
       )}
-      {prepared && actionCard(prepared)}
+      {mode === 'funding' ? (
+        <FundingReview
+          action={prepared}
+          busy={busy}
+          activity={activity}
+          error={error}
+          pending={(campaign.financeOperations || []).some(
+            (op) => op.id === prepared?.operationId && op.status === 'pending',
+          )}
+          onClose={() => setPrepared(null)}
+          onConfirm={() => {
+            if (prepared)
+              void work(
+                () => confirm(prepared),
+                'Creating and publishing your sponsor invoice…',
+              )
+          }}
+        />
+      ) : prepared && actionCard(prepared)}
     </div>
   )
 }
