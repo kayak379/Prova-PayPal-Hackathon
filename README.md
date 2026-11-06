@@ -15,14 +15,15 @@ flowchart LR
     end
 
     subgraph Hosting["Render · Ohio private network"]
-        subgraph Server["Next.js Node · authenticated routes"]
+        subgraph Server["Next.js Node · server routes"]
             direction TB
             WorkspaceAPI["Workspace API<br/>validation · version checks"]
             Discovery["AI discovery agent<br/>plan → retrieve → select → validate"]
             Assistant["AI finance assistant<br/>choose tools → read results → prepare"]
             Payments["Checkout and finance services<br/>validate → execute → verify"]
+            Webhooks["PayPal webhook<br/>signature verification · event handling"]
         end
-        Database[("Managed PostgreSQL<br/>workspace · campaigns (JSONB)<br/>payment attempts · encrypted wallet")]
+        Database[("Managed PostgreSQL<br/>workspace · campaigns (JSONB)<br/>payment attempts · webhook inbox · encrypted wallet")]
     end
 
     subgraph Providers["External services"]
@@ -44,6 +45,9 @@ flowchart LR
     Approval <-->|"confirmation ↔ verified results"| Payments
     Payments <-->|"Toolkit and OAuth REST"| PayPal
     Payments <-->|"locks · recovery · receipts"| Database
+    PayPal -->|"capture · refund · invoice events"| Webhooks
+    Webhooks <-->|"verify signature · fetch authoritative details"| PayPal
+    Webhooks <-->|"deduplicate events · transactional updates"| Database
     Approval <-->|"Web SDK v6 consent"| PayPal
 
     classDef browser fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e,stroke-width:1.5px
@@ -53,7 +57,7 @@ flowchart LR
     class Request,Approval,Workspace browser
     class Discovery,Assistant,Models agent
     class WorkspaceAPI,Database,Catalog service
-    class Payments,PayPal payment
+    class Payments,PayPal,Webhooks payment
 ```
 
 ## Shared PostgreSQL workspace
