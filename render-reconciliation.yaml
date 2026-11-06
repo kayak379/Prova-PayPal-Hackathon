@@ -1,3 +1,4 @@
+# Optional, unapplied template. Reconciliation is currently manual only.
 # Separate Blueprint: only manages reconciliation; existing Prova resources are
 # referenced for configuration and remain managed independently.
 services:

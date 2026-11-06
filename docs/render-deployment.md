@@ -50,7 +50,9 @@ Render supplies RENDER_EXTERNAL_URL automatically. If you add a custom domain, s
 
 Register `https://prova-ddm2.onrender.com/api/paypal/webhook` in the same PayPal sandbox app used by the web service, and set `PAYPAL_WEBHOOK_ID` on that service. The web service's existing pre-deploy command applies the webhook inbox migration.
 
-The separate `render-reconciliation.yaml` Blueprint manages only the `prova-paypal-reconciliation` cron job. It runs `pnpm paypal:reconcile` every ten minutes in Ohio and references the existing `prova` service's database URL and PayPal credentials. No secrets are stored in the Blueprint. Sync this Blueprint again if those referenced values change. The cron job uses Render's smallest paid compute plan and is billed for active runtime with a $1 monthly minimum.
+Reconciliation is currently **manual only**: use the campaign's Reconcile control, ask the finance assistant to reconcile, or run `pnpm paypal:reconcile` in the Render service shell. No scheduled job is active.
+
+`render-reconciliation.yaml` is an optional, unapplied template for a cron job every ten minutes in Ohio. It references the existing `prova` service's database URL and PayPal credentials without storing secrets in source. Its draft Render Blueprint has automatic syncing disabled and has not been approved, so it creates no running service or charges. Applying it later would require approving Render's plan and paid cron billing.
 
 ## Local development and checks
 
