@@ -237,6 +237,24 @@
   50% { transform: translateY(-6px); }
 }
 
+/* Anchor each bill on the left so its free edge flutters independently. */
+@keyframes finance-bill-flutter {
+  0%, 100% { transform: translateY(0) skewY(0deg) scaleY(1); }
+  25% { transform: translateY(-3px) skewY(-12deg) scaleY(.92); }
+  55% { transform: translateY(1px) skewY(7deg) scaleY(1.04); }
+  78% { transform: translateY(-1px) skewY(-5deg) scaleY(.97); }
+}
+
+.finance-bill-flutter {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: finance-bill-flutter 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .finance-bill-flutter { animation: none; }
+}
+
 @layer utilities {
   .animate-ring { animation: ring 3s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
   .animate-float { animation: float-y 4s ease-in-out infinite; }
