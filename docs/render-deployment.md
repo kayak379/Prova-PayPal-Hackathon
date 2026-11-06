@@ -30,9 +30,9 @@ The Blueprint connects DATABASE_URL to the database's internal connection string
 
 Create Render PostgreSQL and a Node Web Service in the **same region**. Connect the repository and use:
 
-- Build command: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
-- Pre-deploy command (paid web service): pnpm db:setup
-- Start command: pnpm start --hostname 0.0.0.0 --port $PORT
+- Build command: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm build
+- Pre-deploy command (paid web service): corepack pnpm db:setup
+- Start command: corepack pnpm start --hostname 0.0.0.0 --port $PORT
 - Node version: 24.22.1
 - DATABASE_URL: the PostgreSQL **internal** connection URL
 - SESSION_SECRET: at least 32 random characters; generate with node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -40,7 +40,7 @@ Create Render PostgreSQL and a Node Web Service in the **same region**. Connect 
 
 For a **free web service**, leave pre-deploy blank and use this build command instead:
 
-corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm db:setup && pnpm build
+corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm db:setup && corepack pnpm build
 
 Select the database plan you want in the dashboard and review its current limits. The checked-in Blueprint deliberately uses paid resources; change its plans before creating it if you prefer another setup.
 

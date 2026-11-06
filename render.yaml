@@ -4,9 +4,9 @@ services:
     runtime: node
     region: ohio
     plan: starter
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build
-    preDeployCommand: pnpm db:setup
-    startCommand: pnpm start --hostname 0.0.0.0 --port $PORT
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm build
+    preDeployCommand: corepack pnpm db:setup
+    startCommand: corepack pnpm start --hostname 0.0.0.0 --port $PORT
     envVars:
       - key: NODE_VERSION
         value: 24.22.1
