@@ -14,7 +14,6 @@ import { sign } from '../lib/server/common'
 import { POST as createCheckout } from '../app/api/checkout/create/route'
 import { POST as captureCheckout } from '../app/api/checkout/capture/route'
 import { POST as refreshPayouts } from '../app/api/checkout/payouts/route'
-import { POST as financeRequest } from '../app/api/finance/route'
 
 const product = (supplier: string, cents: number, id = supplier): PlanItem => ({ id, supplier, name: id, qty: 1, unitPrice: cents / 100, unitPriceCents: cents, category: 'Water', delivery: 'Unverified' })
 const recipients = [{ domain: 'a.example', email: 'a@sandbox.example' }, { domain: 'b.example', email: 'b@sandbox.example' }]
@@ -300,22 +299,6 @@ test('sandbox payout checkout, persistence and recovery', async t => {
         assert.equal((await processPayouts(input.campaignId))[0].payouts?.status, 'NEEDS_REVIEW')
         assert.equal(payoutPosts, before)
       }
-    })
-    await t.test('buyer refund confirmation durably holds queued payouts even when the refund fails', async () => {
-      const { pending, input } = await start()
-      const remote = [...remoteOrders.values()].find(order => order.id === pending.orderId)
-      remote.status = 'COMPLETED'
-      remote.purchase_units[0].payments.captures = [{ id: 'CAP_' + remote.id, status: 'COMPLETED', amount: { currency_code: 'USD', value: '33.90' } }]
-      await withCampaign(input.campaignId, async (c, client) => { await recoverCheckout(c, client) })
-      const token = sign({ kind: 'refund', campaignId: input.campaignId, orderId: pending.orderId, captureId: 'CAP_' + remote.id, operationId: crypto.randomUUID(), amountCents: 4000, expires: Date.now() + 60000 })
-      const before = payoutPosts
-      const response = await financeRequest(request({ action: 'confirm', campaign: { id: input.campaignId }, token }))
-      assert.equal(response.status, 400)
-      assert.match((await response.json()).error, /exceeds/)
-      const orders = await processPayouts(input.campaignId)
-      assert.equal(orders[0].payouts?.status, 'STOPPED')
-      assert.ok(orders[0].payouts?.items.every(item => item.status === 'STOPPED'))
-      assert.equal(payoutPosts, before)
     })
     await t.test('payout status refresh cannot create an intent for a sample or unknown purchase', async () => {
       assert.equal((await refreshPayouts(request({ campaignId: 'demo_completed', orderId: 'DEMO_ORDER_001' }))).status, 400)

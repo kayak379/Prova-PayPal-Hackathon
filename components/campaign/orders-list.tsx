@@ -3,13 +3,14 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, PackageOpen } from 'lucide-react'
 import { useState } from 'react'
+import { FinancePanel } from './finance-panel'
 import { useStore } from '@/lib/store'
 import { PressableLink } from '../kit'
 import { softSpring } from '../motion-provider'
 import { formatTime, usd, usdPrecise } from '@/lib/format'
 import type { Order, OrderStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { ReturnDialog } from './return-dialog'
+import { PayoutStatus } from './payout-status'
 
 const STATUS: Record<OrderStatus, string> = {
   confirmed: 'bg-brand-soft text-brand',
@@ -113,7 +114,16 @@ export function OrdersList({
                         </li>
                       ))}
                     </ul>
-                    {campaign && !campaign.demo && <div className="mt-4 flex justify-end border-t border-border pt-4"><ReturnDialog campaign={campaign} order={o} /></div>}
+                    {o.payouts && <div className="mt-4 border-t border-border pt-4"><PayoutStatus payouts={o.payouts} /><p className="mt-2 text-xs text-muted-foreground">Refunds return the buyer’s payment; they do not reverse retailer payouts.</p></div>}
+                    {campaign && (
+                      <div className="mt-4">
+                        <FinancePanel
+                          campaign={campaign}
+                          mode="refund"
+                          refundOrderId={o.id}
+                        />
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

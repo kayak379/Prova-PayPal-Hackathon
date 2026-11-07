@@ -92,7 +92,6 @@ export function FinancePanel({
   const [orderId, setOrderId] = useState(
     refundOrderId || campaign.orders[0]?.id || '',
   )
-  const [refundRetailer, setRefundRetailer] = useState('')
   async function persist(patch: FinanceDraft) {
     await saveFinanceDraft(latest.current.id, patch)
     latest.current = { ...latest.current, ...patch }
@@ -190,7 +189,6 @@ export function FinancePanel({
         : {
             kind,
             orderId,
-            retailer: refundRetailer || undefined,
             full,
             amountCents: Math.round(Number(amount) * 100),
             reason,
@@ -251,7 +249,6 @@ export function FinancePanel({
       <p className="mt-2 text-xl tabular">
         {dollars(refund.amountCents)}
       </p>
-      {refund.retailer && <p className="mt-1 text-xs text-muted-foreground">Buyer refund for {refund.retailer}</p>}
       <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
         Refund: {refund.id}
         <br />
@@ -327,9 +324,8 @@ export function FinancePanel({
         <p className="my-3 break-words text-xs leading-relaxed text-muted-foreground">
           {action.kind === 'invoice'
             ? `Includes estimated shipping and tax. ${action.emailInvoice ? `PayPal will email this invoice to ${action.email}.` : 'No emails will be sent.'}`
-            : 'Returns funds to the original buyer. This does not recover or cancel retailer payouts.'}
+            : 'Refunds the original payment; does not cancel a retailer order.'}
         </p>
-        {action.kind === 'refund' && action.retailer && <p className="mt-2 text-sm">Retailer portion: {action.retailer}</p>}
         {action.kind === 'refund' && (
           <div className="mb-3 text-sm">
             <p className="break-all text-xs text-muted-foreground">
@@ -711,10 +707,10 @@ export function FinancePanel({
             </span>
             <div>
               <h3 className="font-serif text-2xl tracking-tight">
-                Refund buyer
+                Request a refund
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Return all or part of the original buyer payment. Recovering retailer payouts is a separate action.
+                Review the amount before confirming a refund.
               </p>
             </div>
           </div>
@@ -728,7 +724,6 @@ export function FinancePanel({
               disabled={busy}
               onChange={(e) => {
                 setOrderId(e.target.value)
-                setRefundRetailer('')
                 setPrepared(null)
               }}
             >
@@ -739,13 +734,6 @@ export function FinancePanel({
               ))}
             </select>
           </div>
-          {!!campaign.orders.find(o => o.id === orderId)?.payouts && <div>
-            <Label htmlFor={`refund-retailer-${orderId}`}>Refund portion</Label>
-            <select id={`refund-retailer-${orderId}`} className={inputClass} disabled={busy} value={refundRetailer} onChange={e => { setRefundRetailer(e.target.value); setPrepared(null) }}>
-              <option value="">Whole purchase</option>
-              {campaign.orders.find(o => o.id === orderId)?.payouts?.items.map(item => <option key={item.senderItemId} value={item.retailer}>{item.retailer} · up to {dollars(item.amountCents)}</option>)}
-            </select>
-          </div>}
           <fieldset>
             <legend className="mb-2 text-xs font-medium text-muted-foreground">
               Refund amount

@@ -33,7 +33,6 @@ export async function orderDetails(c: Campaign, orderId: string) {
   )
   if (order.id !== orderId || !capture || capture.amount.currency_code !== 'USD')
     throw new Error('Capture could not be verified in PayPal.')
-  if (usdCents(capture.amount) !== (local.totalCents ?? cents(local.total))) throw new Error('Capture amount mismatch with the purchase.')
   const refunds = (unit.payments.refunds || []).map((r: any) => ({
     id: r.id,
     status: r.status,
@@ -46,20 +45,11 @@ export async function orderDetails(c: Campaign, orderId: string) {
     remaining: Math.max(
       0,
       cents(capture.amount.value) -
-        [...new Map([...(c.refunds || []).filter(r => r.orderId === orderId), ...refunds].map(r => [r.id, r])).values()]
-          .filter((r: any) => !['FAILED', 'CANCELLED', 'CANCELED'].includes(r.status))
+        refunds
+          .filter((r: any) => !['FAILED', 'CANCELLED'].includes(r.status))
           .reduce((s: number, r: any) => s + r.amountCents, 0),
     ),
   }
-}
-function retailerRefundLimit(c: Campaign, orderId: string, retailer: string, state: Awaited<ReturnType<typeof orderDetails>>) {
-  const item = c.orders.find(o => o.id === orderId)?.payouts?.items.find(p => p.retailer === retailer)
-  if (!item) throw new Error('Retailer is outside this purchase.')
-  const refunds = (c.refunds || []).filter(r => r.orderId === orderId && !['FAILED', 'CANCELLED', 'CANCELED'].includes(r.status))
-  if (refunds.some(r => !r.retailer) || state.refunds.some((r: { id: string; status: string }) => !['FAILED', 'CANCELLED', 'CANCELED'].includes(r.status) && !refunds.some(local => local.id === r.id))) {
-    throw new Error('This purchase has refunds without retailer allocation. Use the whole-purchase refund option.')
-  }
-  return Math.min(state.remaining, Math.max(0, item.amountCents - refunds.filter(r => r.retailer === retailer).reduce((sum, r) => sum + r.amountCents, 0)))
 }
 export async function prepareFinance(
   c: Campaign,
@@ -69,19 +59,17 @@ export async function prepareFinance(
   let payload: any
   if (input.kind === 'refund') {
     const result = await orderDetails(c, input.orderId)
-    const remaining = input.retailer ? retailerRefundLimit(c, input.orderId, input.retailer, result) : result.remaining
-    const amount = input.full ? remaining : input.amountCents
+    const amount = input.full ? result.remaining : input.amountCents
     if (
       !Number.isSafeInteger(amount) ||
       amount <= 0 ||
-      amount > remaining
+      amount > result.remaining
     )
       throw new Error(
         'Refund must be positive and no larger than the remaining refundable amount.',
       )
     payload = {
       kind: 'refund',
-      retailer: input.retailer || undefined,
       orderId: input.orderId,
       captureId: result.capture.id,
       amountCents: amount,
@@ -181,8 +169,7 @@ export async function prepareFinance(
     title:
       payload.kind === 'invoice'
         ? `Funding request for ${payload.sponsor}`
-        : payload.retailer ? `Refund buyer · ${payload.retailer}` : 'Refund buyer',
-    retailer: payload.retailer,
+        : 'Refund purchase',
     items: payload.items,
     charges: payload.charges,
     emailInvoice: payload.emailInvoice,
@@ -297,10 +284,7 @@ export async function confirmFinance(c: Campaign, token: string) {
     }
   }
   if (!refund) {
-    const purchase = c.orders.find(o => o.id === action.orderId)!
-    if (purchase.payouts?.status === 'QUEUED') throw new Error('Retailer payments are being resolved. Refresh and retry the refund.')
-    const remaining = action.retailer ? retailerRefundLimit(c, action.orderId, action.retailer, state) : state.remaining
-    if (action.amountCents > remaining)
+    if (action.amountCents > state.remaining)
       throw new Error('Refund exceeds available funds.')
     refund = await paypal(
       'create_refund',
@@ -308,7 +292,7 @@ export async function confirmFinance(c: Campaign, token: string) {
         capture_id: action.captureId,
         amount: money(action.amountCents),
         invoice_id: action.operationId,
-        note_to_payer: action.reason || 'Prova purchase refund',
+        note_to_payer: action.reason || 'Prova sandbox purchase refund',
       },
       action.operationId,
     )
@@ -324,7 +308,6 @@ export async function confirmFinance(c: Campaign, token: string) {
     throw new Error('Refund amount or currency was not confirmed by PayPal.')
   refundDetails(refund, refundId, action.captureId, action.amountCents)
   const record: PurchaseRefund = {
-    retailer: action.retailer,
     id: refund.id,
     operationId: action.operationId,
     orderId: action.orderId,

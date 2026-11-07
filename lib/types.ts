@@ -17,7 +17,6 @@ export type RetailerPayout = {
   error?: string
 }
 export type PayoutSummary = {
-  recoveryRequested?: boolean
   id: string
   batchId?: string
   status: string
@@ -155,7 +154,6 @@ export type FundingRequest = {
   error?: string
 }
 export type PurchaseRefund = {
-  retailer?: string
   id: string
   orderId: string
   captureId: string
@@ -166,7 +164,6 @@ export type PurchaseRefund = {
   proof: string
 }
 export type FinanceAction = {
-  retailer?: string
   charges?: { subtotal: number; shipping: number; tax: number; total: number }
   orderId?: string
   captureId?: string
