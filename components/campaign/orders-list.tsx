@@ -3,15 +3,13 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, PackageOpen } from 'lucide-react'
 import { useState } from 'react'
-import { FinancePanel } from './finance-panel'
 import { useStore } from '@/lib/store'
 import { PressableLink } from '../kit'
 import { softSpring } from '../motion-provider'
 import { formatTime, usd, usdPrecise } from '@/lib/format'
 import type { Order, OrderStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { PayoutStatus } from './payout-status'
-import { RetailerRecovery } from './retailer-recovery'
+import { ReturnDialog } from './return-dialog'
 
 const STATUS: Record<OrderStatus, string> = {
   confirmed: 'bg-brand-soft text-brand',
@@ -87,6 +85,7 @@ export function OrdersList({
                 <ChevronDown className="size-4" />
               </motion.span>
             </button>
+            {campaign && !campaign.demo && <div className="flex justify-end px-5 pb-3"><ReturnDialog campaign={campaign} order={o} /></div>}
             <AnimatePresence initial={false}>
               {expanded && (
                 <motion.div
@@ -115,16 +114,6 @@ export function OrdersList({
                         </li>
                       ))}
                     </ul>
-                    {o.payouts && <div className="mt-4 border-t border-border pt-4"><PayoutStatus payouts={o.payouts} /><RetailerRecovery campaignId={campaignId} order={o} /></div>}
-                    {campaign && (
-                      <div className="mt-4">
-                        <FinancePanel
-                          campaign={campaign}
-                          mode="refund"
-                          refundOrderId={o.id}
-                        />
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               )}
