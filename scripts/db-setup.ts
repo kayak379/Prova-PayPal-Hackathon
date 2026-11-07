@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { database, transaction } from '../lib/server/db'
 import { seed } from '../db/seed'
 import { bootstrapWallet } from '../db/bootstrap-wallet'
+import { bootstrapRetailers } from '../db/bootstrap-retailers'
+import { sandboxRetailers } from '../db/sandbox-retailers'
 async function main() {
   await transaction(async client => {
     await client.query("SELECT pg_advisory_xact_lock(70261105)")
@@ -15,6 +17,7 @@ async function main() {
       console.log('Applied migration:', name)
     }
     await seed(client)
+    await bootstrapRetailers(client, sandboxRetailers)
     await bootstrapWallet(client, process.env.PAYPAL_DEFAULT_VAULT_WALLET, process.env.PAYPAL_CLIENT_SECRET)
   })
   console.log('Database ready; existing workspace data preserved.')
