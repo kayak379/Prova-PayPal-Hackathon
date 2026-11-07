@@ -42,5 +42,14 @@ and failed individual payouts are not automatically resent. Ambiguous requests
 older than 29 days require manual review in the sandbox account because PayPal's
 duplicate protection has a limited lifetime.
 
-Refunding a purchase returns the buyer's capture; it does not reverse retailer
-payouts. Unsent payouts on refunded purchases are held for review.
+The dashboard separates buyer refunds from retailer recovery. Buyer refunds can
+cover the whole purchase or one retailer's portion, including its allocated
+shipping and tax. Pending and completed refunds reserve the refundable amount.
+Legacy refunds without retailer allocation remain refundable at purchase level.
+
+Retailer recovery requires a separate review and confirmation. It stops an
+unsubmitted batch, cancels selected unclaimed payouts, and refreshes returned
+funds. Completed payouts require the recipient to issue a refund in PayPal;
+Prova does not pretend those funds can be withdrawn automatically. An unknown
+submission outcome is held for manual review. Retailer returns do not credit
+the campaign budget a second time. Stop queued payouts before refunding a buyer.

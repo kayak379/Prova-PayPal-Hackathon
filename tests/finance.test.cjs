@@ -254,6 +254,42 @@ test('refund confirmation uses exact cents, idempotency and deduplicates complet
   await s.confirmFinance(c, a.token)
   assert.equal(s.calls.filter((c) => c.name === 'create_refund').length, 1)
 })
+test('retailer-specific buyer refunds reserve pending amounts and revalidate the selected portion', async () => {
+  const s = setup(() => paypalOrder())
+  const c = campaign()
+  c.orders = [{ ...order, payouts: { id: 'batch', status: 'SUCCESS', items: [
+    { retailer: 'a.example', amountCents: 400 }, { retailer: 'b.example', amountCents: 600 },
+  ] } }]
+  c.refunds = [{ id: 'local-pending', orderId: 'order1', retailer: 'a.example', amountCents: 200, status: 'PENDING' }]
+  const a = await s.prepareFinance(c, { kind: 'refund', orderId: 'order1', retailer: 'a.example', full: true })
+  assert.equal(a.amountCents, 200)
+  assert.equal(a.retailer, 'a.example')
+  assert.equal((await s.prepareFinance(c, { kind: 'refund', orderId: 'order1', retailer: 'b.example', full: true })).amountCents, 600)
+  await assert.rejects(s.prepareFinance(c, { kind: 'refund', orderId: 'order1', retailer: 'a.example', amountCents: 201 }), /Refund must/)
+  c.refunds[0].amountCents = 400
+  await assert.rejects(s.confirmFinance(c, a.token), /exceeds/)
+  assert.equal(s.calls.filter(call => call.name === 'create_refund').length, 0)
+  await assert.rejects(s.prepareFinance(c, { kind: 'refund', orderId: 'order1', retailer: 'other.example', full: true }), /outside/)
+})
+
+test('legacy unallocated refunds cannot be reassigned to a retailer', async () => {
+  const s = setup(() => paypalOrder())
+  const c = campaign()
+  c.orders = [{ ...order, payouts: { id: 'batch', items: [{ retailer: 'a.example', amountCents: 1000 }] } }]
+  c.refunds = [{ id: 'legacy', orderId: 'order1', amountCents: 200, status: 'COMPLETED' }]
+  await assert.rejects(s.prepareFinance(c, { kind: 'refund', orderId: 'order1', retailer: 'a.example', full: true }), /without retailer allocation/)
+  assert.equal((await s.prepareFinance(c, { kind: 'refund', orderId: 'order1', full: true })).amountCents, 800)
+})
+
+test('queued retailer payouts must be stopped before initiating a buyer refund', async () => {
+  const s = setup(() => paypalOrder())
+  const c = campaign()
+  c.orders = [{ ...order, payouts: { id: 'batch', status: 'QUEUED', items: [] } }]
+  const a = await s.prepareFinance(c, { kind: 'refund', orderId: 'order1', full: true })
+  await assert.rejects(s.confirmFinance(c, a.token), /Stop the queued/)
+  assert.equal(s.calls.filter(call => call.name === 'create_refund').length, 0)
+})
+
 test('changed availability rejects a refund before writing', async () => {
   let refunded = false
   const s = setup((name) =>

@@ -34,7 +34,7 @@ function duplicateBatchPath(error: unknown): string | undefined {
   }
 }
 
-function applyBatch(summary: PayoutSummary, data: any) {
+export function applyPayoutBatch(summary: PayoutSummary, data: any) {
   const header = data.batch_header
   if (!header?.payout_batch_id || header.sender_batch_header?.sender_batch_id !== summary.id ||
       (summary.batchId && header.payout_batch_id !== summary.batchId)) throw new Error('PayPal payout batch reference mismatch.')
@@ -60,6 +60,9 @@ function applyBatch(summary: PayoutSummary, data: any) {
     : ['DENIED', 'CANCELED'].includes(header.batch_status) ? 'FAILED'
     : summary.items.every(item => terminalItems.has(item.status)) ? (successes ? 'PARTIAL' : 'FAILED') : 'PENDING'
   summary.error = summary.status === 'FAILED' ? 'Retailer payouts failed. Check the individual PayPal statuses and account.' : undefined
+  if (summary.items.every(item => ['RETURNED', 'REFUNDED'].includes(item.status))) summary.status = 'RECOVERED'
+  else if (summary.recoveryRequested) summary.status = 'RECOVERY_REQUESTED'
+  if (summary.status !== 'FAILED') summary.error = undefined
 }
 
 // Mark the FIRST possible submission in a committed transaction, independently
@@ -72,7 +75,8 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
     const current = await campaign(client, campaignId, true)
     if (current.demo) throw new Error('Sample campaigns cannot send payouts.')
     await client.query(`UPDATE sandbox_payout_batches SET first_submitted_at=$3
-      WHERE campaign_id=$1 AND ($2::text IS NULL OR order_id=$2) AND first_submitted_at IS NULL`, [campaignId, orderId || null, Date.now()])
+      WHERE campaign_id=$1 AND ($2::text IS NULL OR order_id=$2) AND first_submitted_at IS NULL
+      AND NOT COALESCE((data->>'recoveryRequested')::boolean,false)`, [campaignId, orderId || null, Date.now()])
   })
   return withCampaign(campaignId, async (current, client) => {
     if (current.demo) throw new Error('Sample campaigns cannot send payouts.')
@@ -84,7 +88,7 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
       const summary = row.data
       const before = JSON.stringify(summary)
       try {
-        if (!summary.batchId && !['FAILED', 'NEEDS_REVIEW'].includes(summary.status)) {
+        if (!summary.batchId && !summary.recoveryRequested && !['FAILED', 'NEEDS_REVIEW'].includes(summary.status)) {
           if (!row.first_submitted_at || Date.now() - Number(row.first_submitted_at) >= 29 * 86400000) {
             summary.status = 'NEEDS_REVIEW'
             summary.error = 'Payout submission is too old to retry safely. Check the PayPal account.'
@@ -110,12 +114,12 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
                 if (path) result = await paypalRest(path + '?page_size=1000')
                 else throw error
               }
-              applyBatch(summary, result)
+              applyPayoutBatch(summary, result)
             }
           }
         }
         if (summary.batchId) {
-          applyBatch(summary, await paypalRest('/v1/payments/payouts/' + encodeURIComponent(summary.batchId) + '?page_size=1000'))
+          applyPayoutBatch(summary, await paypalRest('/v1/payments/payouts/' + encodeURIComponent(summary.batchId) + '?page_size=1000'))
         }
       } catch (error) {
         summary.error = error instanceof Error ? error.message : 'Payout unavailable.'

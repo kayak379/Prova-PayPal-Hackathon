@@ -35,11 +35,12 @@ const definitions = [
   },
   {
     name: 'prepare_refund',
-    description: 'Prepare a refund for user review; does not execute a refund',
+    description: 'Prepare a refund to the original buyer, optionally for one retailer portion. Does not recover outgoing retailer payouts or execute a refund.',
     parameters: {
       type: 'object',
       properties: {
         orderId: str,
+        retailer: str,
         amountCents: integer,
         full: { type: 'boolean' },
         reason: str,
@@ -95,6 +96,7 @@ export async function financeChat(
     orders: c.orders.map((o) => ({
       id: o.id,
       items: o.items,
+      retailerPayouts: o.payouts?.items,
       totalCents: o.totalCents ?? Math.round(o.total * 100),
     })),
     proposal: c.proposal ? { items: c.proposal.items } : null,
@@ -108,6 +110,7 @@ export async function financeChat(
       id: r.id,
       status: r.status,
       amountCents: r.amountCents,
+      retailer: r.retailer,
     })),
   }
   const system =
