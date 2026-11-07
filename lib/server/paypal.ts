@@ -1,5 +1,8 @@
 import { PayPalAgentToolkit } from '@paypal/agent-toolkit/openai'
 import { env } from './common'
+export class PayPalError extends Error {
+  constructor(message: string, public details: any, public status: number) { super(message) }
+}
 export async function paypalRest(
   path: string,
   method = 'GET',
@@ -38,8 +41,9 @@ export async function paypalRest(
   const data = response.status === 204 ? {} : await response.json()
   if (!response.ok) {
     const issue = data.details?.[0]?.issue || data.name || response.status
-    throw new Error(
-      `PayPal: ${issue}. ${response.status === 403 ? 'Enable Vault in your sandbox app and confirm saved-wallet eligibility.' : 'Please retry or review the sandbox account setup.'}`,
+    throw new PayPalError(
+      `PayPal: ${issue}. ${response.status === 403 ? (path.startsWith('/v1/payments/payouts') ? 'Enable Payouts access for your sandbox app.' : 'Enable Vault in your sandbox app and confirm saved-wallet eligibility.') : 'Please retry or review the sandbox account setup.'}`,
+      data, response.status,
     )
   }
   return data

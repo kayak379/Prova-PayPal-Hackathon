@@ -24,6 +24,9 @@ import type { Draft } from './campaign-wizard'
 
 import { paypalSDK } from '@/lib/paypal-client'
 import { totalsCents } from '@/lib/money'
+import { allocateRetailerPayouts } from '@/lib/retailer-payouts'
+import { SettingsDialog } from '../settings-dialog'
+import { PayoutStatus } from '../campaign/payout-status'
 const PHRASE = 'I approve'
 type Pending = { orderId: string; ticket: string; approvalUrl: string }
 async function post(url: string, input: unknown) {
@@ -60,11 +63,15 @@ export function StepCheckout({
   const started = useRef(false)
   const [savedEmail, setSavedEmail] = useState('')
   const [approveOpen, setApproveOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [paymentStage, setPaymentStage] = useState('')
   const paymentLock = useRef(false)
   const captureLock = useRef(false)
   const totals = totalsCents(plan.items)
   const groups = [...new Set(plan.items.map((p) => p.supplier))]
+  let recipientError = ''
+  try { allocateRetailerPayouts(plan.items, settings.retailerRecipients || []) }
+  catch (error) { recipientError = error instanceof Error ? error.message : 'Configure sandbox retailer recipients.' }
   useEffect(() => {
     void paypalSDK().catch(() => {})
     fetch('/api/paypal/vault')
@@ -77,7 +84,7 @@ export function StepCheckout({
   async function capture(payment: Pending) {
     if (captureLock.current) return
     captureLock.current = true
-    setPaymentStage('Verifying the captured amount with PayPal…')
+    setPaymentStage('Verifying payment and sending sandbox retailer payouts…')
     setBusy(true)
     setError('')
     callbacks.current.onPayingChange(true)
@@ -123,6 +130,21 @@ export function StepCheckout({
       } catch (e) { setError(e instanceof Error ? e.message : 'Could not restore checkout.') }
     })()
   }, [])
+  useEffect(() => {
+    if (!receipt?.payouts || !['QUEUED', 'PENDING'].includes(receipt.payouts.status)) return
+    let active = true
+    let attempts = 0
+    let timer: ReturnType<typeof setTimeout>
+    async function update() {
+      try {
+        const result = await post('/api/checkout/payouts', { campaignId: existingId, orderId: receipt!.id })
+        if (active) { setReceipt(result.receipt); await refresh() }
+      } catch { /* The verified receipt remains valid during payout outages. */ }
+      if (active && ++attempts < 12) timer = setTimeout(update, 5000)
+    }
+    timer = setTimeout(update, 5000)
+    return () => { active = false; clearTimeout(timer) }
+  }, [receipt?.id, receipt?.payouts?.status, existingId, refresh])
   async function approvePayment(payment: Pending) {
     const sdk = await paypalSDK()
     const eligible = await sdk.findEligibleMethods({ currencyCode: 'USD' })
@@ -226,6 +248,8 @@ export function StepCheckout({
     void pay()
   }
   return (
+    <>
+    <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     <AnimatePresence mode="wait" initial={false}>
       {receipt && existingId ? (
         <motion.div
@@ -363,8 +387,9 @@ export function StepCheckout({
                   </div>
                 ) : (
                   <>
+                    {recipientError && !pending && <p role="alert" className="mt-4 text-xs text-destructive">{recipientError} <button type="button" className="underline" onClick={() => setSettingsOpen(true)}>Account settings</button></p>}
                     <motion.button
-                      disabled={!!pending || !plan.snapshot}
+                      disabled={!!pending || !plan.snapshot || !!recipientError}
                       onClick={() => setApproveOpen(true)}
                       whileHover={{ y: -1 }}
                       whileTap={{ scale: 0.97 }}
@@ -402,6 +427,7 @@ export function StepCheckout({
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   )
 }
 
@@ -430,7 +456,8 @@ function ApproveForm({
           {usd(total)}
         </span>{' '}
         for supplies from {count} {count === 1 ? 'retailer' : 'retailers'}.
-        Review the amount and supplies before approving.
+        Review the amount and supplies before approving. Sandbox retailer payouts
+        are sent automatically after payment.
       </p>
       <div>
         <label
@@ -587,6 +614,7 @@ function Receipt({
           ))}
         </ul>
       </Card>
+      {orders.some(order => order.payouts) && <Card className="w-full max-w-lg p-5">{orders.map(order => order.payouts && <PayoutStatus key={order.id} payouts={order.payouts} />)}</Card>}
       <PressableLink href={`/campaigns/${campaignId}`} size="lg">
         Campaign Dashboard <ArrowRight />
       </PressableLink>

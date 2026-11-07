@@ -4,6 +4,7 @@ import { processWebhook } from '../lib/server/paypal-webhooks'
 import { withCampaign } from '../lib/server/workspace'
 import { reconcile } from '../lib/server/finance'
 import { applyFinance } from '../lib/server/finance-persistence'
+import { processPayouts } from '../lib/server/payouts'
 
 async function main() {
   let failures = 0
@@ -30,6 +31,13 @@ async function main() {
         applyFinance(campaign, result)
         return result
       }, true)
+      const payoutOrders = await processPayouts(id)
+      for (const order of payoutOrders) {
+        if (order.payouts?.error || ['FAILED', 'PARTIAL', 'NEEDS_REVIEW'].includes(order.payouts?.status || '')) {
+          failures++
+          console.error('Sandbox retailer payouts:', order.id, order.payouts?.status, order.payouts?.error || '')
+        }
+      }
       const uncertain = result.verification.findings.filter(f => /unavailable|mismatch/i.test(f))
       if (uncertain.length) { failures++; console.error(id, uncertain.join('; ')) }
       else console.log('Reconciled campaign:', id)

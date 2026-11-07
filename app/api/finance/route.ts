@@ -3,6 +3,7 @@ import { withCampaign } from '@/lib/server/workspace'
 import { applyFinance } from '@/lib/server/finance-persistence'
 import { message } from '@/lib/server/common'
 import type { FinanceResult } from '@/lib/types'
+import { processPayouts } from '@/lib/server/payouts'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -43,6 +44,12 @@ export async function POST(request: Request) {
       }
       return result
     })
+    if (body.action === 'reconcile') {
+      try { await processPayouts(body.campaign.id) }
+      catch (error) {
+        result.verification?.findings.push(`Retailer payout verification unavailable — ${message(error)}`)
+      }
+    }
     return Response.json(result)
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 400 })

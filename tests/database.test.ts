@@ -29,6 +29,7 @@ test('PostgreSQL workspace integration', async t => {
   ;(globalThis as unknown as { provaPool: Pool }).provaPool = { query, connect: async () => client } as unknown as Pool
   await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/002_wallet_bootstrap.sql', 'utf8'))
+  await db.exec(await readFile('db/migrations/004_sandbox_payouts.sql', 'utf8'))
   try {
     await t.test('seed once and preserve edits on repeated deployment', async () => {
       await seed(client as any)
@@ -94,8 +95,10 @@ test('PostgreSQL workspace integration', async t => {
       assert.equal((await workspace()).campaigns.find(c => c.id === actual.id)!.refunds!.length, 1)
     })
     await t.test('checkout persists a reusable attempt before network failure', async () => {
+      const w = await workspace()
+      await mutate({ kind: 'settings', version: w.version, settings: { ...w.settings, retailerRecipients: [{ domain: 'test.example', email: 'retailer@sandbox.example' }] } })
       const c = await mutate({ kind: 'create', entityId: crypto.randomUUID(), draft: { name: 'Checkout test', budget: 5000, folderId: 'f_hurricane' } }) as any
-      const items = [{ id: 'water', name: 'Water', category: 'Water', supplier: 'Test', unitPrice: 10, unitPriceCents: 1000, qty: 1, delivery: 'Tomorrow' }]
+      const items = [{ id: 'water', name: 'Water', category: 'Water', supplier: 'test.example', unitPrice: 10, unitPriceCents: 1000, qty: 1, delivery: 'Tomorrow' }]
       const snapshot = sign({ kind: 'prices', products: items, budgetCents: 500000, expires: Date.now() + 60000 })
       await mutate({ kind: 'proposal', id: c.id, version: 1, request: 'Water', proposal: { items, snapshot, reasoning: [], shipping: 0, tax: 0, discount: 0 } })
       const originalFetch = globalThis.fetch
@@ -120,8 +123,12 @@ test('PostgreSQL workspace integration', async t => {
         assert.equal((await retry.json()).orderId, pending.orderId)
         assert.equal(creates, 1)
         let captured = false
+        const payoutPlan = (await db.query<any>('SELECT attempt_id FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows[0]
+        const payout = { batch_header: { payout_batch_id: 'BATCH1', batch_status: 'SUCCESS', sender_batch_header: { sender_batch_id: payoutPlan.attempt_id } }, items: [{ payout_item_id: 'ITEM1', transaction_status: 'SUCCESS', payout_item: { sender_item_id: 'retailer-1', receiver: 'retailer@sandbox.example', amount: { currency: 'USD', value: '11.30' } } }] }
         globalThis.fetch = async (url, options) => {
           if (String(url).includes('oauth2/token')) return Response.json({ access_token: 'test-token' })
+          if (String(url).includes('/v1/payments/payouts')) return Response.json(payout)
+          if (String(url).endsWith('/v2/payments/captures/TEST_CAPTURE')) return Response.json({ id: 'TEST_CAPTURE', status: 'COMPLETED', amount: { currency_code: 'USD', value: '11.30' } })
           if (String(url).endsWith('/capture')) {
             assert.equal((options?.headers as Record<string,string>)['PayPal-Request-Id'], 'capture-TEST_ORDER')
             captured = true
@@ -137,6 +144,7 @@ test('PostgreSQL workspace integration', async t => {
         assert.equal((await captureCheckout(captureRequest())).status, 200)
         const saved = (await workspace()).campaigns.find(v => v.id === c.id)!
         assert.equal(saved.orders.length, 1); assert.equal(saved.proposal, null)
+        assert.equal(saved.orders[0].payouts?.status, 'SUCCESS')
         assert.equal((await db.query<{ completed: boolean }>('SELECT completed FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows[0].completed, true)
       } finally { globalThis.fetch = originalFetch }
     })

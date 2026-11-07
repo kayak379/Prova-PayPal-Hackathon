@@ -1,8 +1,27 @@
 export type Settings = {
+  retailerRecipients?: RetailerRecipient[]
   paypalEmail?: string
   orgName: string
   taxId: string
   address: string
+}
+
+export type RetailerRecipient = { domain: string; email: string }
+export type RetailerPayout = {
+  senderItemId: string
+  retailer: string
+  recipient: string
+  amountCents: number
+  status: string
+  payoutItemId?: string
+  error?: string
+}
+export type PayoutSummary = {
+  id: string
+  batchId?: string
+  status: string
+  items: RetailerPayout[]
+  error?: string
 }
 
 export type Folder = {
@@ -38,6 +57,7 @@ export type Plan = {
 export type OrderStatus = 'confirmed' | 'processing' | 'shipped' | 'delivered'
 
 export type Order = {
+  payouts?: PayoutSummary
   approvedTotalCents?: number
   mock?: boolean
   id: string

@@ -10,6 +10,7 @@ import { softSpring } from '../motion-provider'
 import { formatTime, usd, usdPrecise } from '@/lib/format'
 import type { Order, OrderStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { PayoutStatus } from './payout-status'
 
 const STATUS: Record<OrderStatus, string> = {
   confirmed: 'bg-brand-soft text-brand',
@@ -113,6 +114,7 @@ export function OrdersList({
                         </li>
                       ))}
                     </ul>
+                    {o.payouts && <div className="mt-4 border-t border-border pt-4"><PayoutStatus payouts={o.payouts} /><p className="mt-2 text-xs text-muted-foreground">Refunds return the buyer’s payment; they do not reverse retailer payouts.</p></div>}
                     {campaign && (
                       <div className="mt-4">
                         <FinancePanel

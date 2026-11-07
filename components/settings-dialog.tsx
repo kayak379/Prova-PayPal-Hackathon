@@ -93,10 +93,15 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
   }
 
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    try { await updateSettings(form) } catch { return }
+    setSaveError('')
+    try { await updateSettings(form) } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not save settings.')
+      return
+    }
     setSaved(true)
     setTimeout(onClose, 650)
   }
@@ -130,6 +135,23 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
         {walletError && <p role="alert" className="mt-3 text-xs text-destructive">{walletError}</p>}
 
       </div>
+      <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
+        <legend className="px-1 text-sm font-medium">Sandbox retailer recipients</legend>
+        <p className="text-xs text-muted-foreground">Map each retailer domain to its PayPal sandbox account email. Checkout sends test payouts automatically. Use accounts created in the PayPal Developer Dashboard.</p>
+        {(form.retailerRecipients || []).map((recipient, index) => (
+          <div key={index} className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
+            <Label htmlFor={`retailer-domain-${index}`}>Retailer domain</Label>
+            <input id={`retailer-domain-${index}`} className={inputClass} placeholder="example.com" value={recipient.domain} required
+              onChange={e => setForm({ ...form, retailerRecipients: form.retailerRecipients!.map((entry, i) => i === index ? { ...entry, domain: e.target.value } : entry) })} />
+            <Label htmlFor={`retailer-email-${index}`}>Sandbox PayPal email</Label>
+            <input id={`retailer-email-${index}`} className={inputClass} type="email" placeholder="retailer@sandbox.example" value={recipient.email} required
+              onChange={e => setForm({ ...form, retailerRecipients: form.retailerRecipients!.map((entry, i) => i === index ? { ...entry, email: e.target.value } : entry) })} />
+            <button type="button" className="self-start text-xs text-muted-foreground underline" onClick={() => setForm({ ...form, retailerRecipients: form.retailerRecipients!.filter((_, i) => i !== index) })}>Remove retailer</button>
+          </div>
+        ))}
+        <button type="button" className="self-start text-sm underline" onClick={() => setForm({ ...form, retailerRecipients: [...(form.retailerRecipients || []), { domain: '', email: '' }] })}>Add retailer</button>
+      </fieldset>
+      {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
       <Pressable disabled={walletBusy} type="submit" size="lg" className="mt-2 w-full overflow-hidden">
         <AnimatePresence mode="popLayout" initial={false}>
           {saved ? (
