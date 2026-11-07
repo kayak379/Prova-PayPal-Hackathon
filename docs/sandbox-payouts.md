@@ -16,9 +16,11 @@ delivery. No live payment endpoint is used.
    the payout total and fees.
 3. Default test recipients cover Lowe's, Home Depot, Grainger, Uline, Zoro,
    Walmart, Amazon, Costco, Sam's Club and Global Industrial. These are simulated
-   retailer accounts, not the retailers' real PayPal accounts. For other domains,
-   add a sandbox business email in Prova's account settings. Use the domains shown
-   in the proposal, such as `example.com`.
+   retailer accounts, not the retailers' real PayPal accounts. Any new retailer
+   domain is automatically assigned one of these ten accounts using a stable
+   domain-based selection. Accounts can be reused across domains; each retailer
+   still receives its own payout item. Optional mappings in account settings
+   override automatic selection. No manual mapping or new account is required.
 4. Complete checkout normally with a sandbox buyer account. The same approval
    authorizes the automatic retailer payouts. Test shipping and tax are allocated
    proportionally; payout fees are paid by the sending sandbox account.

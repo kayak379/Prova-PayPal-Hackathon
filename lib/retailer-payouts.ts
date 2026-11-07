@@ -1,5 +1,17 @@
 import type { PlanItem, RetailerRecipient, RetailerPayout } from './types'
 import { priceCents, totalsCents } from './money'
+import { sandboxRetailers } from '../db/sandbox-retailers'
+
+// A stable domain hash makes assignment independent of cart order, quantities,
+// requests and concurrent checkouts. Keep the pool order stable. Checkout saves
+// the resolved email in its existing immutable payout plan before calling PayPal.
+function sandboxRecipient(domain: string) {
+  const standard = sandboxRetailers.find(recipient => recipient.domain === domain)
+  if (standard) return standard.email
+  let hash = 2166136261
+  for (let i = 0; i < domain.length; i++) hash = Math.imul(hash ^ domain.charCodeAt(i), 16777619) >>> 0
+  return sandboxRetailers[hash % sandboxRetailers.length].email
+}
 
 export function retailerDomain(value: string) {
   const domain = value.trim().toLowerCase().replace(/^www\./, '').replace(/\.$/, '')
@@ -50,10 +62,8 @@ export function allocateRetailerPayouts(items: PlanItem[], recipients: RetailerR
   }
   const shipping = allocate(totals.shipping)
   const tax = allocate(totals.tax)
-  const missing = retailers.filter(([domain]) => !mapping.has(domain)).map(([domain]) => domain)
-  if (missing.length) throw new Error(`Add sandbox PayPal recipients in account settings for: ${missing.join(', ')}.`)
   return retailers.map(([domain, subtotal], i) => ({
-    senderItemId: `retailer-${i + 1}`, retailer: domain, recipient: mapping.get(domain)!,
+    senderItemId: `retailer-${i + 1}`, retailer: domain, recipient: mapping.get(domain) || sandboxRecipient(domain),
     amountCents: subtotal + shipping[i] + tax[i], status: 'QUEUED',
   }))
 }

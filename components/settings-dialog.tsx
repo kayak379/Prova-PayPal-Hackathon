@@ -137,7 +137,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
       </div>
       <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
         <legend className="px-1 text-sm font-medium">Sandbox retailer recipients</legend>
-        <p className="text-xs text-muted-foreground">Map each retailer domain to its PayPal sandbox account email. Checkout sends test payouts automatically. Use accounts created in the PayPal Developer Dashboard.</p>
+        <p className="text-xs text-muted-foreground">New retailer domains automatically use one of the 10 sandbox business accounts. These optional mappings override that assignment. Test accounts may be reused across retailers; no real payments are sent.</p>
         {(form.retailerRecipients || []).map((recipient, index) => (
           <div key={index} className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
             <Label htmlFor={`retailer-domain-${index}`}>Retailer domain</Label>

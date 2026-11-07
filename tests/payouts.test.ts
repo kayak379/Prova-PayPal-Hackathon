@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import type { Pool } from 'pg'
 import type { PlanItem, Order } from '../lib/types'
 import { allocateRetailerPayouts, retailerRecipients } from '../lib/retailer-payouts'
+import { sandboxRetailers } from '../db/sandbox-retailers'
 import { seed } from '../db/seed'
 import { mutate, workspace, withCampaign } from '../lib/server/workspace'
 import { recoverCheckout } from '../lib/server/checkout-persistence'
@@ -24,11 +25,31 @@ test('retailer allocation preserves cents, groups domains and validates recipien
   assert.deepEqual(result.map(item => item.amountCents), [67, 46])
   assert.equal(result.reduce((sum, item) => sum + item.amountCents, 0), 113)
   assert.deepEqual(result, allocateRetailerPayouts([...items].reverse(), recipients))
-  assert.throws(() => allocateRetailerPayouts(items, recipients.slice(0, 1)), /b.example/)
+  assert.equal(allocateRetailerPayouts(items, recipients.slice(0, 1))[0].recipient, recipients[0].email)
   assert.throws(() => retailerRecipients([...recipients, { ...recipients[0], domain: 'WWW.A.EXAMPLE' }]), /Duplicate/)
   assert.throws(() => retailerRecipients([{ domain: 'a.example', email: 'invalid' }]), /sandbox PayPal email/)
   assert.throws(() => retailerRecipients([{ domain: 'https://a.example/path', email: 'a@example.com' }]), /retailer domain/)
   assert.deepEqual(retailerRecipients(undefined), [])
+})
+
+test('automatic sandbox assignment is stable, reusable and subordinate to explicit mappings', () => {
+  const items = Array.from({ length: 48 }, (_, i) => product(`new-retailer-${i}.example`, 100))
+  const pool = new Set(sandboxRetailers.map(recipient => recipient.email))
+  const automatic = allocateRetailerPayouts(items, [])
+  assert.equal(automatic.length, 48)
+  assert.ok(automatic.every(item => pool.has(item.recipient)))
+  assert.ok(new Set(automatic.map(item => item.recipient)).size <= 10)
+  assert.equal(automatic.reduce((sum, item) => sum + item.amountCents, 0), 5424)
+  for (const item of automatic) {
+    assert.equal(allocateRetailerPayouts([product(`www.${item.retailer.toUpperCase()}.`, 200)], [])[0].recipient, item.recipient)
+  }
+  assert.deepEqual(allocateRetailerPayouts([...items].reverse(), []), automatic)
+  const overridden = allocateRetailerPayouts(items, [{ domain: items[0].supplier, email: 'override@sandbox.example' }])
+  assert.equal(overridden.find(item => item.retailer === items[0].supplier)!.recipient, 'override@sandbox.example')
+  assert.deepEqual(overridden.filter(item => item.retailer !== items[0].supplier), automatic.filter(item => item.retailer !== items[0].supplier))
+  for (const recipient of sandboxRetailers) assert.equal(allocateRetailerPayouts([product(recipient.domain, 100)], [])[0].recipient, recipient.email)
+  const manyOverrides = Array.from({ length: 100 }, (_, i) => ({ domain: `override${i}.example`, email: 'override@sandbox.example' }))
+  assert.deepEqual(allocateRetailerPayouts(items, manyOverrides), automatic)
 })
 
 test('sandbox payout checkout, persistence and recovery', async t => {
@@ -142,13 +163,21 @@ test('sandbox payout checkout, persistence and recovery', async t => {
       assert.equal(response.status, 200, await response.clone().text())
       return (await response.json()).receipt
     }
-    await t.test('missing mappings block checkout before any PayPal call; settings round-trip', async () => {
+    await t.test('unmapped retailers complete checkout automatically; concurrent requests reuse frozen recipients', async () => {
       await setRecipients([])
-      const count = creates.length
-      const response = await createCheckout(request(await proposal()))
-      assert.equal(response.status, 400)
-      assert.match((await response.json()).error, /account settings/)
-      assert.equal(creates.length, count)
+      const input = await proposal()
+      const expected = allocateRetailerPayouts([product('a.example', 1000), product('b.example', 2000)], [])
+      const before = creates.length
+      const responses = await Promise.all([createCheckout(request(input)), createCheckout(request(input))])
+      assert.ok(responses.every(response => response.status === 200))
+      const payments = await Promise.all(responses.map(response => response.json()))
+      assert.equal(payments[0].orderId, payments[1].orderId)
+      assert.equal(creates.length - before, 1)
+      await setRecipients()
+      const receipt = await pay(payments[0])
+      assert.equal(receipt.payouts?.status, 'SUCCESS')
+      assert.deepEqual(receipt.payouts?.items.map(item => item.recipient), expected.map(item => item.recipient))
+      assert.equal((await pay(payments[0])).paypalTxn, receipt.paypalTxn)
       await setRecipients()
       assert.deepEqual((await workspace()).settings.retailerRecipients, recipients)
     })
