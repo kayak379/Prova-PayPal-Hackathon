@@ -76,10 +76,10 @@ function ReturnForm({ campaign, order, onClose }: { campaign: Campaign; order: O
     const operations = [...(campaign.financeOperations || []).filter(op => op.id !== review.operationId), { id: review.operationId, action: review, status: 'pending' as const }]
     await saveFinanceDraft(campaign.id, { financeOperations: operations })
     const result = await post('/api/finance', { action: 'confirm', campaign: { id: campaign.id }, token: review.token })
+    await refresh()
     setReview(null)
     setDone(result.refund.status === 'COMPLETED' ? `${dollars(result.refund.amountCents)} refunded` : 'Refund submitted')
     await saveFinanceDraft(campaign.id, { financeOperations: operations.map(op => op.id === review.operationId ? { ...op, status: 'completed' as const, resultId: result.refund.id } : op) })
-    await refresh()
   }
   const activeRetailer = review?.retailer ?? retailer
   const items = activeRetailer ? order.items.filter(item => item.supplier.toLowerCase().replace(/^www\./, '').replace(/\.$/, '') === activeRetailer) : order.items
