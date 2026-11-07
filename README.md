@@ -30,7 +30,7 @@ flowchart LR
         direction TB
         Models["OpenRouter → Gemini<br/>structured output and function calls"]
         Catalog["Channel3<br/>product offers"]
-        PayPal["PayPal Sandbox<br/>Checkout · Vault · Invoicing<br/>Refunds · Transaction Search"]
+        PayPal["PayPal Sandbox<br/>Checkout · Vault · Invoicing<br/>Payouts · Refunds · Transaction Search"]
     end
 
     Request <-->|"request ↔ signed proposal"| Discovery
@@ -104,7 +104,7 @@ The [discovery agent](lib/server/discovery.ts) runs a server-directed workflow b
 ## PayPal Developer Platform
 I had a lot of fun using the platform. I'd never explored PayPal's sandbox or developer features before (or fintech platforms in general), and I was impressed by how powerful they are.
 
-Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for campaign finance operations, and direct REST calls for Vault and Orders v2 checkout. All three run against PayPal Sandbox; retailer fulfillment is simulated.
+Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for campaign finance operations, and direct REST calls for Vault, Orders v2 checkout and the Payouts API. All three run against PayPal Sandbox; retailer fulfillment is simulated.
 
 ### Sandbox OAuth and the PayPal Agent Toolkit
 
@@ -117,6 +117,8 @@ The browser initializes the Sandbox SDK with the public client ID and the `paypa
 The server reconstructs the cart from signed catalog prices, checks the proposal budget and the campaign’s remaining funds, and binds the order ID, campaign, approved items and total to a signed payment ticket. Both one-time and saved-wallet purchases use `POST /v2/checkout/orders`, with a stable request ID committed to PostgreSQL before the external call. Saved-wallet requests include the PayPal `vault_id` and charge breakdown. PayPal can require additional payer approval on that path. [Checkout service](lib/server/checkout.ts) · [Checkout creation route](app/api/checkout/create/route.ts)
 
 After approval, `GET /v2/checkout/orders/{id}` retrieves the order and `POST /v2/checkout/orders/{id}/capture` captures an approved order with a stable capture request ID. The server retrieves the order again after the capture attempt, including after a timeout. It issues a receipt only when the order and capture are completed and the capture matches the exact approved USD amount. PostgreSQL retains the pending order and signed recovery ticket across browsers and server restarts. The server saves the verified receipt and marks the attempt completed in one SQL transaction; repeated capture requests return the saved receipt. [Checkout service](lib/server/checkout.ts) · [Capture route](app/api/checkout/capture/route.ts) · [Checkout wizard](components/wizard/step-checkout.tsx)
+
+After capture, the Payouts API splits the purchase into retailer payments using `POST /v1/payments/payouts`. Each retailer receives its merchandise total plus its share of shipping and tax. Saved batch and item references support status checks and recovery without duplicate payouts. These are Sandbox payouts to configured test accounts. [Payout service](lib/server/payouts.ts)
 
 ### Vault API and Payment Method Tokens v3
 
@@ -132,10 +134,12 @@ After approval, `GET /v2/checkout/orders/{id}` retrieves the order and `POST /v2
 | PayPal capability | Toolkit operations | How Prova uses it |
 | --- | --- | --- |
 | Invoicing | `create_invoice`, `send_invoice`, `get_invoice`, `generate_invoice_qr_code` | Creates a sponsor invoice for selected merchandise and estimated charges, persists the draft reference in PostgreSQL, and then publishes it. The server retrieves the payment link and generates a QR code. Sponsor email is opt-in and merchant notifications are suppressed. Status refreshes update saved records; retrying publication for an already-published invoice can recover its QR code without resending email. Verified receipts from sponsors are tracked separately from the purchasing budget. |
-| Payments and refunds | `create_refund`, `get_refund` | Revalidates the original capture and remaining refundable amount, then submits an exact partial refund or the full remaining amount after confirmation. Retrieves refund details to verify amount and status. Only completed refunds reduce campaign spending. |
+| Payments and refunds | `create_refund`, `get_refund` | A “Request a refund” dialog lets operators select one or more suppliers, or the entire purchase, then review and confirm. The server verifies the capture and remaining supplier shares, including shipping and tax, and submits the combined refund. Unselected supplier balances stay unchanged; only completed refunds reduce campaign spending. |
 | Transaction Search | `list_transactions` | Supplements reconciliation of purchases, refunds and invoices. Object status comes from the corresponding PayPal order, refund or invoice lookup, so a delayed or unavailable reporting entry does not determine payment status. |
 
 [Finance service](lib/server/finance.ts) · [Invoice QR handling](lib/server/invoice-qr.ts)
+
+Refunds return funds to the original buyer; they do not recover already-sent retailer payouts. Supplier allocations are saved to prevent refunding the same portion twice, while retries reuse the original operation ID.
 
 ### PayPal webhooks and missed-event recovery
 
