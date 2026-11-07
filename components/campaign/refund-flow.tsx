@@ -15,7 +15,7 @@ const dollars = (cents: number) => usdPrecise(cents / 100)
 export function RefundFlow({ campaign, orderId }: { campaign: Campaign; orderId: string }) {
   const { flush, refresh, saveFinanceDraft } = useStore()
   const [open, setOpen] = useState(false)
-  const [selection, setSelection] = useState('all')
+  const [selection, setSelection] = useState<string[]>(['all'])
   const [reason, setReason] = useState('')
   const [prepared, setPrepared] = useState<FinanceAction | null>(null)
   const [result, setResult] = useState<PurchaseRefund | null>(null)
@@ -32,7 +32,8 @@ export function RefundFlow({ campaign, orderId }: { campaign: Campaign; orderId:
   const balances = order ? refundBalances(order, campaign.refunds || []) : []
   const reserved = (campaign.refunds || []).filter(r => r.orderId === orderId && !['FAILED', 'CANCELLED', 'CANCELED'].includes(r.status)).reduce((sum, r) => sum + r.amountCents, 0)
   const remaining = Math.max(0, (order?.totalCents ?? Math.round((order?.total || 0) * 100)) - reserved)
-  const selectedAmount = selection === 'all' ? remaining : balances.find(b => b.retailer === selection)?.amountCents || 0
+  const entirePurchase = selection.includes('all')
+  const selectedAmount = entirePurchase ? remaining : balances.filter(b => selection.includes(b.retailer)).reduce((sum, b) => sum + b.amountCents, 0)
   const pending = (campaign.financeOperations || []).filter(op => op.status === 'pending' && op.action.kind === 'refund' && op.action.orderId === orderId)
   const stage = result ? 'done' : prepared ? 'review' : 'choose'
 
@@ -80,8 +81,16 @@ export function RefundFlow({ campaign, orderId }: { campaign: Campaign; orderId:
     setResult(data.refund)
     await refresh()
   }
+  function toggleSupplier(retailer: string) {
+    setSelection(current => {
+      if (retailer === 'all') return current.includes('all') ? [] : ['all']
+      if (current.includes(retailer)) return current.filter(value => value !== retailer)
+      return [...current.filter(value => value !== 'all'), retailer]
+    })
+  }
+
   function launch(action?: FinanceAction) {
-    setSelection('all'); setReason(''); setPrepared(action || null); setResult(null); setError(''); setOpen(true)
+    setSelection(['all']); setReason(''); setPrepared(action || null); setResult(null); setError(''); setOpen(true)
   }
   if (!order) return null
   return <div className="space-y-3">
@@ -90,42 +99,42 @@ export function RefundFlow({ campaign, orderId }: { campaign: Campaign; orderId:
     </button>
     {pending.map(op => <button key={op.id} onClick={() => launch(op.action)} className="block text-sm text-brand underline underline-offset-4">Resume refund · {dollars(op.action.amountCents)}</button>)}
     {(campaign.refunds || []).filter(r => r.orderId === orderId).map(r => <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-      <span>{r.allocations?.length === 1 ? r.allocations[0].retailer : 'Purchase refund'} · {dollars(r.amountCents)}</span>
+      <span>{r.allocations?.length === 1 ? r.allocations[0].retailer : r.allocations?.length ? `${r.allocations.length} suppliers` : 'Purchase refund'} · {dollars(r.amountCents)}</span>
       <button onClick={() => { launch(); setResult(r) }} className="rounded-md px-2 py-1 transition-colors hover:bg-muted">View refund <ArrowRight className="ml-1 inline size-3" /></button>
     </div>)}
     <Modal open={open} onClose={() => { if (!lock.current) setOpen(false) }} title={result ? 'Your refund' : 'Request a refund'} dismissable={!busy} className="max-w-lg">
       <div ref={content} tabIndex={-1} className="outline-none">
-        <div className="mb-6 flex items-center gap-2" aria-label={result ? 'Refund submitted' : prepared ? 'Step 2 of 2: Review' : 'Step 1 of 2: Choose supplier'}>
-          {['Choose', 'Review'].map((label, i) => <div key={label} className="flex flex-1 items-center gap-2 text-xs"><span className={`flex size-6 items-center justify-center rounded-full transition-colors ${result || i === (prepared ? 1 : 0) ? 'bg-brand text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{result ? <Check className="size-3" /> : i + 1}</span><span className="text-muted-foreground">{label}</span>{i === 0 && <span className="ml-2 h-px flex-1 bg-border" />}</div>)}
+        <div className="mb-6 flex items-center justify-center gap-4" aria-label={result ? 'Refund submitted' : prepared ? 'Step 2 of 2: Review' : 'Step 1 of 2: Choose suppliers'}>
+          {['Choose', 'Review'].map((label, i) => <div key={label} className="contents"><div className="flex items-center gap-2 text-xs"><span className={`flex size-6 items-center justify-center rounded-full transition-colors ${result || i === (prepared ? 1 : 0) ? 'bg-brand text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{result ? <Check className="size-3" /> : i + 1}</span><span className="text-muted-foreground">{label}</span></div>{i === 0 && <span className="h-px w-12 bg-border sm:w-20" />}</div>)}
         </div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={stage} initial={{ opacity: 0, x: reduced ? 0 : 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reduced ? 0 : -12 }} transition={{ duration: reduced ? 0 : 0.18 }}>
             {result ? <div className="space-y-5 text-center">
               <motion.div initial={{ scale: reduced ? 1 : 0.6 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 240, damping: 16 }} className="mx-auto flex size-16 items-center justify-center rounded-full bg-brand-soft text-brand"><CheckCircle2 className="size-8" /></motion.div>
-              <div><h3 className="font-serif text-3xl">{result.status === 'COMPLETED' ? 'Refund complete' : ['FAILED', 'CANCELLED', 'CANCELED'].includes(result.status) ? 'Refund not completed' : 'Refund submitted'}</h3><p className="mt-2 text-3xl tabular">{dollars(result.amountCents)}</p><p className="mt-2 text-sm text-muted-foreground">{result.allocations?.length === 1 ? result.allocations[0].retailer : 'Entire purchase'} · {result.status.toLowerCase().replaceAll('_', ' ')}</p></div>
+              <div><h3 className="font-serif text-3xl">{result.status === 'COMPLETED' ? 'Refund complete' : ['FAILED', 'CANCELLED', 'CANCELED'].includes(result.status) ? 'Refund not completed' : 'Refund submitted'}</h3><p className="mt-2 text-3xl tabular">{dollars(result.amountCents)}</p><p className="mt-2 text-sm text-muted-foreground">{result.allocations?.length === 1 ? result.allocations[0].retailer : result.allocations?.length ? `${result.allocations.length} suppliers` : 'Purchase refund'} · {result.status.toLowerCase().replaceAll('_', ' ')}</p></div>
               <p className="text-sm text-muted-foreground">{result.status === 'COMPLETED' ? 'Returned to the original buyer. Your campaign budget has been updated.' : 'Your campaign budget updates when PayPal confirms completion.'}</p>
               {result.status !== 'COMPLETED' && <Pressable disabled={busy} onClick={() => work(async () => { const data = await api('refund', { id: result.id }); setResult(data.refund); await refresh() })}>Refresh status</Pressable>}
               <button onClick={() => setOpen(false)} disabled={busy} className="block w-full rounded-full border border-border px-4 py-3 text-sm transition-colors hover:bg-muted">Done</button>
             </div> : prepared ? <div className="space-y-5">
-              <div className="rounded-2xl border border-brand/20 bg-brand-soft/30 p-5"><p className="text-xs text-muted-foreground">Refund to original buyer</p><p className="mt-2 font-serif text-4xl tabular">{dollars(prepared.amountCents)}</p><p className="mt-2 text-sm">{prepared.allocations?.length === 1 ? prepared.allocations[0].retailer : 'All remaining suppliers'}</p></div>
+              <div className="rounded-2xl border border-brand/20 bg-brand-soft/30 p-5"><p className="text-xs text-muted-foreground">Refund to original buyer</p><p className="mt-2 font-serif text-4xl tabular">{dollars(prepared.amountCents)}</p><p className="mt-2 text-sm">{prepared.title === 'Refund entire purchase' ? 'Entire purchase' : prepared.allocations?.length === 1 ? prepared.allocations[0].retailer : `${prepared.allocations?.length || 0} selected suppliers`}</p></div>
               <div className="space-y-2">{prepared.allocations?.map(share => <div key={share.retailer} className="flex justify-between gap-3 text-sm"><span className="truncate">{share.retailer}</span><span className="tabular">{dollars(share.amountCents)}</span></div>)}</div>
-              <p className="text-xs leading-relaxed text-muted-foreground">{prepared.allocations?.length === 1 ? 'Other suppliers’ refundable balances stay unchanged. ' : ''}Budget is restored after PayPal confirms completion. Already-sent retailer payouts are separate and are not recovered by this refund.</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">Only the listed suppliers’ refundable balances are reduced. Budget is restored after PayPal confirms completion. Already-sent retailer payouts are separate and are not recovered by this refund.</p>
               <div className="flex items-center justify-between gap-3"><button disabled={busy || pending.some(op => op.id === prepared.operationId)} onClick={() => { setPrepared(null); setError('') }} className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm hover:bg-muted disabled:opacity-40"><ArrowLeft className="size-4" />Back</button><Pressable disabled={busy} onClick={() => work(confirm)}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <RotateCcw className="size-4" />} {pending.some(op => op.id === prepared.operationId) ? 'Retry same refund' : 'Confirm refund'}</Pressable></div>
             </div> : <div className="space-y-5">
-              <p className="text-sm text-muted-foreground">Choose a supplier, or refund the entire purchase.</p>
+              <p className="text-sm text-muted-foreground">Choose one or more suppliers, or refund the entire purchase.</p>
               <fieldset className="space-y-2"><legend className="sr-only">What would you like to refund?</legend>
                 {[{ retailer: 'all', amountCents: remaining }, ...balances].map(option => {
-                  const chosen = selection === option.retailer
+                  const chosen = selection.includes(option.retailer)
                   return <motion.label key={option.retailer} whileTap={reduced ? undefined : { scale: 0.99 }} className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring ${chosen ? 'border-brand/60 bg-brand-soft/40' : 'border-border hover:bg-muted/40'} ${!option.amountCents ? 'cursor-not-allowed opacity-45' : ''}`}>
-                    <input type="radio" name={id} value={option.retailer} checked={chosen} disabled={!option.amountCents || busy} onChange={() => setSelection(option.retailer)} className="sr-only" />
+                    <input type="checkbox" name={id} value={option.retailer} checked={chosen} disabled={!option.amountCents || busy} onChange={() => toggleSupplier(option.retailer)} className="sr-only" />
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-brand">{option.retailer === 'all' ? <ReceiptText className="size-4" /> : <Store className="size-4" />}</span>
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{option.retailer === 'all' ? 'Entire purchase' : option.retailer}</span><span className="text-xs text-muted-foreground">{option.amountCents ? option.retailer === 'all' ? 'All remaining refundable funds' : 'Includes shipping & tax' : 'No refundable funds'}</span></span>
-                    <span className="text-sm tabular">{dollars(option.amountCents)}</span><span className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${chosen ? 'border-brand bg-brand text-primary-foreground' : 'border-border'}`}>{chosen && <Check className="size-3" />}</span>
+                    <span className="text-sm tabular">{dollars(option.amountCents)}</span><span className={`flex size-4 shrink-0 items-center justify-center rounded border ${chosen ? 'border-brand bg-brand text-primary-foreground' : 'border-border'}`}>{chosen && <Check className="size-3" />}</span>
                   </motion.label>
                 })}
               </fieldset>
               <div><Label htmlFor={`${id}-reason`}>Reason <span className="font-normal text-muted-foreground">(optional)</span></Label><input id={`${id}-reason`} className={inputClass} maxLength={200} placeholder="Tell us what happened" value={reason} disabled={busy} onChange={e => setReason(e.target.value)} /></div>
-              <Pressable className="w-full justify-center" disabled={busy || selectedAmount <= 0} onClick={() => work(async () => { const data = await api('prepare', { input: { kind: 'refund', orderId, refundScope: selection === 'all' ? 'all' : 'supplier', supplier: selection, full: true, reason } }); setPrepared(data.prepared) })}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Review {dollars(selectedAmount)} <ArrowRight className="size-4" /></>}</Pressable>
+              <Pressable className="w-full justify-center" disabled={busy || selectedAmount <= 0} onClick={() => work(async () => { const data = await api('prepare', { input: { kind: 'refund', orderId, refundScope: entirePurchase ? 'all' : 'suppliers', suppliers: selection, full: true, reason } }); setPrepared(data.prepared) })}>{busy ? <LoaderCircle className="size-4 animate-spin" /> : <>Review {dollars(selectedAmount)} <ArrowRight className="size-4" /></>}</Pressable>
             </div>}
           </motion.div>
         </AnimatePresence>

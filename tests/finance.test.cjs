@@ -705,3 +705,43 @@ test('legacy partial refund shares remain stable after a supplier refund', () =>
   assert.deepEqual(refundBalances(o, [legacy]), [{ retailer: 'a', amountCents: 480 }, { retailer: 'b', amountCents: 320 }])
   assert.deepEqual(refundBalances(o, [legacy, { orderId: 'o', amountCents: 480, status: 'COMPLETED', allocations: [{ retailer: 'a', amountCents: 480 }] }]), [{ retailer: 'a', amountCents: 0 }, { retailer: 'b', amountCents: 320 }])
 })
+
+test('multiple supplier refunds combine exact shares and leave unselected suppliers unchanged', async () => {
+  const c = campaign()
+  c.orders = [{ ...order, payouts: { id: 'batch', status: 'SUCCESS', items: [
+    { retailer: 'a.example', amountCents: 501 },
+    { retailer: 'b.example', amountCents: 299 },
+    { retailer: 'c.example', amountCents: 200 },
+  ] } }]
+  let remote = []
+  let refund
+  const s = setup((name, args) => {
+    if (name === 'get_order') return paypalOrder(remote)
+    if (name === 'create_refund') {
+      refund = { id: 'multi-refund', status: 'COMPLETED', amount: args.amount, invoice_id: args.invoice_id,
+        links: [{ rel: 'up', href: 'https://api-m.sandbox.paypal.com/v2/payments/captures/capture1' }] }
+      remote = [refund]
+      return refund
+    }
+    if (name === 'get_refund') return refund
+    throw Error('Unexpected call: ' + name)
+  })
+  const input = { kind: 'refund', orderId: order.id, refundScope: 'suppliers', suppliers: ['a.example', 'b.example'] }
+  for (const suppliers of [[], ['a.example', 'a.example'], ['missing'], ['a.example', 123]]) {
+    await assert.rejects(s.prepareFinance(c, { ...input, suppliers }), /suppliers|No refundable/)
+  }
+  const prepared = await s.prepareFinance(c, input)
+  assert.equal(prepared.amountCents, 800)
+  assert.equal(prepared.title, 'Refund 2 suppliers')
+  assert.deepEqual(prepared.allocations, [{ retailer: 'a.example', amountCents: 501 }, { retailer: 'b.example', amountCents: 299 }])
+  const result = await s.confirmFinance(c, prepared.token)
+  assert.equal(s.calls.find(call => call.name === 'create_refund').args.amount.value, '8.00')
+  c.refunds = [result.refund]
+  const { refundBalances } = load('lib/refund-allocation.ts', {})
+  assert.deepEqual(refundBalances(c.orders[0], c.refunds), [{ retailer: 'a.example', amountCents: 0 }, { retailer: 'b.example', amountCents: 0 }, { retailer: 'c.example', amountCents: 200 }])
+  const remainder = await s.prepareFinance(c, { ...input, refundScope: 'all' })
+  assert.equal(remainder.amountCents, 200)
+  assert.deepEqual(remainder.allocations, [{ retailer: 'c.example', amountCents: 200 }])
+  await s.confirmFinance(c, prepared.token)
+  assert.equal(s.calls.filter(call => call.name === 'create_refund').length, 1)
+})

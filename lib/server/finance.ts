@@ -86,14 +86,20 @@ export async function prepareFinance(
     let amount = input.full ? result.remaining : input.amountCents
     let allocations: RefundAllocation[] | undefined
     if (input.refundScope !== undefined) {
-      if (!['all', 'supplier'].includes(input.refundScope)) throw new Error('Choose a refund scope.')
+      if (!['all', 'supplier', 'suppliers'].includes(input.refundScope)) throw new Error('Choose a refund scope.')
       const order = c.orders.find(o => o.id === input.orderId)!
       const balances = refundBalances(order, await verifiedRefunds(c, result))
-      if (input.refundScope === 'supplier') {
-        const supplier = balances.find(b => b.retailer === input.supplier)
-        if (!supplier || supplier.amountCents <= 0) throw new Error('No refundable funds remain for this supplier.')
-        amount = supplier.amountCents
-        allocations = [{ ...supplier }]
+      if (input.refundScope === 'supplier' || input.refundScope === 'suppliers') {
+        const selected = input.refundScope === 'supplier' ? [input.supplier] : input.suppliers
+        if (!Array.isArray(selected) || !selected.length || selected.length > balances.length ||
+            selected.some(supplier => typeof supplier !== 'string') || new Set(selected).size !== selected.length)
+          throw new Error('Choose one or more distinct suppliers.')
+        allocations = selected.map(retailer => {
+          const supplier = balances.find(b => b.retailer === retailer)
+          if (!supplier || supplier.amountCents <= 0) throw new Error('No refundable funds remain for this supplier.')
+          return { ...supplier }
+        })
+        amount = allocations.reduce((sum, supplier) => sum + supplier.amountCents, 0)
       } else if (balances.length) {
         amount = result.remaining
         allocations = splitRefund(balances, amount)
@@ -209,7 +215,7 @@ export async function prepareFinance(
     title:
       payload.kind === 'invoice'
         ? `Funding request for ${payload.sponsor}`
-        : payload.allocations?.length === 1 ? `Refund ${payload.allocations[0].retailer}` : input.refundScope === 'all' ? 'Refund entire purchase' : 'Refund purchase',
+        : input.refundScope === 'all' ? 'Refund entire purchase' : payload.allocations?.length === 1 ? `Refund ${payload.allocations[0].retailer}` : payload.allocations?.length ? `Refund ${payload.allocations.length} suppliers` : 'Refund purchase',
     allocations: payload.allocations,
     items: payload.items,
     charges: payload.charges,
