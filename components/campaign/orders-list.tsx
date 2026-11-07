@@ -85,7 +85,6 @@ export function OrdersList({
                 <ChevronDown className="size-4" />
               </motion.span>
             </button>
-            {campaign && !campaign.demo && <div className="flex justify-end px-5 pb-3"><ReturnDialog campaign={campaign} order={o} /></div>}
             <AnimatePresence initial={false}>
               {expanded && (
                 <motion.div
@@ -114,6 +113,7 @@ export function OrdersList({
                         </li>
                       ))}
                     </ul>
+                    {campaign && !campaign.demo && <div className="mt-4 flex justify-end border-t border-border pt-4"><ReturnDialog campaign={campaign} order={o} /></div>}
                   </div>
                 </motion.div>
               )}

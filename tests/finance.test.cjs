@@ -286,7 +286,7 @@ test('queued retailer payouts must be stopped before initiating a buyer refund',
   const c = campaign()
   c.orders = [{ ...order, payouts: { id: 'batch', status: 'QUEUED', items: [] } }]
   const a = await s.prepareFinance(c, { kind: 'refund', orderId: 'order1', full: true })
-  await assert.rejects(s.confirmFinance(c, a.token), /Stop the queued/)
+  await assert.rejects(s.confirmFinance(c, a.token), /payments are being resolved/)
   assert.equal(s.calls.filter(call => call.name === 'create_refund').length, 0)
 })
 

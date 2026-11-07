@@ -298,7 +298,7 @@ export async function confirmFinance(c: Campaign, token: string) {
   }
   if (!refund) {
     const purchase = c.orders.find(o => o.id === action.orderId)!
-    if (purchase.payouts?.status === 'QUEUED') throw new Error('Stop the queued retailer payout through retailer recovery before refunding the buyer.')
+    if (purchase.payouts?.status === 'QUEUED') throw new Error('Retailer payments are being resolved. Refresh and retry the refund.')
     const remaining = action.retailer ? retailerRefundLimit(c, action.orderId, action.retailer, state) : state.remaining
     if (action.amountCents > remaining)
       throw new Error('Refund exceeds available funds.')
