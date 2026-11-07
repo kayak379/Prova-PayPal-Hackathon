@@ -35,7 +35,7 @@ async function main() {
       for (const order of payoutOrders) {
         if (order.payouts?.error || ['FAILED', 'PARTIAL', 'NEEDS_REVIEW'].includes(order.payouts?.status || '')) {
           failures++
-          console.error('Sandbox retailer payouts:', order.id, order.payouts?.status, order.payouts?.error || '')
+          console.error('Retailer payouts:', order.id, order.payouts?.status, order.payouts?.error || '')
         }
       }
       const uncertain = result.verification.findings.filter(f => /unavailable|mismatch/i.test(f))

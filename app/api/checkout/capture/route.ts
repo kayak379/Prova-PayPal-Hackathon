@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         result.receipt = orders[0] || result.receipt
       }
     } catch (error) {
-      console.error('Sandbox payout recovery required:', error instanceof Error ? error.message : 'error')
+      console.error('Payout recovery required:', error instanceof Error ? error.message : 'error')
     }
     return Response.json(result)
   } catch (error) {

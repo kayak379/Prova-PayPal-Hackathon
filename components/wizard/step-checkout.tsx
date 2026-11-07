@@ -71,7 +71,7 @@ export function StepCheckout({
   const groups = [...new Set(plan.items.map((p) => p.supplier))]
   let recipientError = ''
   try { allocateRetailerPayouts(plan.items, settings.retailerRecipients || []) }
-  catch (error) { recipientError = error instanceof Error ? error.message : 'Configure sandbox retailer recipients.' }
+  catch (error) { recipientError = error instanceof Error ? error.message : 'Configure retailer recipients.' }
   useEffect(() => {
     void paypalSDK().catch(() => {})
     fetch('/api/paypal/vault')
@@ -84,7 +84,7 @@ export function StepCheckout({
   async function capture(payment: Pending) {
     if (captureLock.current) return
     captureLock.current = true
-    setPaymentStage('Verifying payment and sending sandbox retailer payouts…')
+    setPaymentStage('Verifying payment and sending retailer payouts…')
     setBusy(true)
     setError('')
     callbacks.current.onPayingChange(true)
@@ -456,7 +456,7 @@ function ApproveForm({
           {usd(total)}
         </span>{' '}
         for supplies from {count} {count === 1 ? 'retailer' : 'retailers'}.
-        Review the amount and supplies before approving. Sandbox retailer payouts
+        Review the amount and supplies before approving. Retailer payouts
         are sent automatically after payment.
       </p>
       <div>

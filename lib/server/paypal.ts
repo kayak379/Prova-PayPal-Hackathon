@@ -42,7 +42,7 @@ export async function paypalRest(
   if (!response.ok) {
     const issue = data.details?.[0]?.issue || data.name || response.status
     throw new PayPalError(
-      `PayPal: ${issue}. ${response.status === 403 ? (path.startsWith('/v1/payments/payouts') ? 'Enable Payouts access for your sandbox app.' : 'Enable Vault in your sandbox app and confirm saved-wallet eligibility.') : 'Please retry or review the sandbox account setup.'}`,
+      `PayPal: ${issue}. ${response.status === 403 ? (path.startsWith('/v1/payments/payouts') ? 'Enable Payouts access for your PayPal app.' : 'Enable Vault in your sandbox app and confirm saved-wallet eligibility.') : 'Please retry or review the account setup.'}`,
       data, response.status,
     )
   }

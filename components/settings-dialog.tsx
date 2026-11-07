@@ -136,15 +136,15 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
 
       </div>
       <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
-        <legend className="px-1 text-sm font-medium">Sandbox retailer recipients</legend>
-        <p className="text-xs text-muted-foreground">New retailer domains automatically use one of the 10 sandbox business accounts. These optional mappings override that assignment. Test accounts may be reused across retailers; no real payments are sent.</p>
+        <legend className="px-1 text-sm font-medium">Retailer recipients</legend>
+        <p className="text-xs text-muted-foreground">Retailers are assigned an account automatically. Add a mapping to choose a specific PayPal recipient.</p>
         {(form.retailerRecipients || []).map((recipient, index) => (
           <div key={index} className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
             <Label htmlFor={`retailer-domain-${index}`}>Retailer domain</Label>
             <input id={`retailer-domain-${index}`} className={inputClass} placeholder="example.com" value={recipient.domain} required
               onChange={e => setForm({ ...form, retailerRecipients: form.retailerRecipients!.map((entry, i) => i === index ? { ...entry, domain: e.target.value } : entry) })} />
-            <Label htmlFor={`retailer-email-${index}`}>Sandbox PayPal email</Label>
-            <input id={`retailer-email-${index}`} className={inputClass} type="email" placeholder="retailer@sandbox.example" value={recipient.email} required
+            <Label htmlFor={`retailer-email-${index}`}>PayPal email</Label>
+            <input id={`retailer-email-${index}`} className={inputClass} type="email" placeholder="retailer@example.com" value={recipient.email} required
               onChange={e => setForm({ ...form, retailerRecipients: form.retailerRecipients!.map((entry, i) => i === index ? { ...entry, email: e.target.value } : entry) })} />
             <button type="button" className="self-start text-xs text-muted-foreground underline" onClick={() => setForm({ ...form, retailerRecipients: form.retailerRecipients!.filter((_, i) => i !== index) })}>Remove retailer</button>
           </div>

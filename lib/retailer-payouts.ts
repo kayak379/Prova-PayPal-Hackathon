@@ -29,7 +29,7 @@ export function retailerRecipients(input: unknown): RetailerRecipient[] {
     if (!entry || typeof entry.domain !== 'string' || typeof entry.email !== 'string') throw new Error('Invalid retailer recipient.')
     const domain = retailerDomain(entry.domain)
     const email = entry.email.trim()
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`Enter a sandbox PayPal email for ${domain}.`)
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`Enter a PayPal email for ${domain}.`)
     if (used.has(domain)) throw new Error(`Duplicate retailer domain: ${domain}.`)
     used.add(domain)
     return { domain, email }

@@ -59,7 +59,7 @@ function applyBatch(summary: PayoutSummary, data: any) {
   summary.status = successes === summary.items.length ? 'SUCCESS'
     : ['DENIED', 'CANCELED'].includes(header.batch_status) ? 'FAILED'
     : summary.items.every(item => terminalItems.has(item.status)) ? (successes ? 'PARTIAL' : 'FAILED') : 'PENDING'
-  summary.error = summary.status === 'FAILED' ? 'Retailer payouts failed. Check the individual PayPal statuses and sandbox account.' : undefined
+  summary.error = summary.status === 'FAILED' ? 'Retailer payouts failed. Check the individual PayPal statuses and account.' : undefined
 }
 
 // Mark the FIRST possible submission in a committed transaction, independently
@@ -87,7 +87,7 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
         if (!summary.batchId && !['FAILED', 'NEEDS_REVIEW'].includes(summary.status)) {
           if (!row.first_submitted_at || Date.now() - Number(row.first_submitted_at) >= 29 * 86400000) {
             summary.status = 'NEEDS_REVIEW'
-            summary.error = 'Payout submission is too old to retry safely. Check the sandbox PayPal account.'
+            summary.error = 'Payout submission is too old to retry safely. Check the PayPal account.'
           } else {
             const capture = await paypalRest('/v2/payments/captures/' + encodeURIComponent(order.paypalTxn))
             if (capture.id !== order.paypalTxn || usdCents(capture.amount) !== order.totalCents) throw new Error('Payout capture verification mismatch.')
@@ -98,11 +98,11 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
               let result: any
               try {
                 result = await paypalRest('/v1/payments/payouts', 'POST', {
-                  sender_batch_header: { sender_batch_id: summary.id, email_subject: 'Prova sandbox retailer payout' },
+                  sender_batch_header: { sender_batch_id: summary.id, email_subject: 'Prova retailer payout' },
                   items: summary.items.map(item => ({
                     recipient_type: 'EMAIL', receiver: item.recipient, sender_item_id: item.senderItemId,
                     amount: { currency: 'USD', value: (item.amountCents / 100).toFixed(2) },
-                    note: 'Sandbox campaign supplies. Fulfillment simulated.',
+                    note: 'Campaign supplies.',
                   })),
                 }, summary.id)
               } catch (error) {
@@ -118,7 +118,7 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
           applyBatch(summary, await paypalRest('/v1/payments/payouts/' + encodeURIComponent(summary.batchId) + '?page_size=1000'))
         }
       } catch (error) {
-        summary.error = error instanceof Error ? error.message : 'Sandbox payout unavailable.'
+        summary.error = error instanceof Error ? error.message : 'Payout unavailable.'
         // Definitive request rejection must not be retried automatically. An
         // ambiguous failure retains its original identifiers for reconciliation.
         if (!summary.batchId && error instanceof PayPalError) {
@@ -131,7 +131,7 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
       await client.query('UPDATE sandbox_payout_batches SET data=$2 WHERE id=$1', [row.id, JSON.stringify(summary)])
       if (before !== JSON.stringify(summary)) current.audit.push({
         id: crypto.randomUUID(), at: Date.now(), actor: 'paypal',
-        message: `Sandbox retailer payouts · ${order.id} · ${summary.status}${summary.error ? ' · ' + summary.error : ''}`,
+        message: `Retailer payouts · ${order.id} · ${summary.status}${summary.error ? ' · ' + summary.error : ''}`,
       })
       orders.push(order)
     }

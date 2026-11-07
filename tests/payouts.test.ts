@@ -27,7 +27,7 @@ test('retailer allocation preserves cents, groups domains and validates recipien
   assert.deepEqual(result, allocateRetailerPayouts([...items].reverse(), recipients))
   assert.equal(allocateRetailerPayouts(items, recipients.slice(0, 1))[0].recipient, recipients[0].email)
   assert.throws(() => retailerRecipients([...recipients, { ...recipients[0], domain: 'WWW.A.EXAMPLE' }]), /Duplicate/)
-  assert.throws(() => retailerRecipients([{ domain: 'a.example', email: 'invalid' }]), /sandbox PayPal email/)
+  assert.throws(() => retailerRecipients([{ domain: 'a.example', email: 'invalid' }]), /PayPal email/)
   assert.throws(() => retailerRecipients([{ domain: 'https://a.example/path', email: 'a@example.com' }]), /retailer domain/)
   assert.deepEqual(retailerRecipients(undefined), [])
 })
