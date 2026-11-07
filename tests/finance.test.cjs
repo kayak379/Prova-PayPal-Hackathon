@@ -638,3 +638,70 @@ test('PayPal sponsor invoice line items exactly match the confirmed total includ
   assert.deepEqual(result.funding.charges, action.charges)
   assert.doesNotMatch(request.note, /excluded/)
 })
+
+test('supplier refunds isolate balances, reject repeats and allow refunding the remainder', async () => {
+  const c = campaign()
+  c.orders = [{ ...order, payouts: { id: 'batch', status: 'SUCCESS', items: [
+    { retailer: 'a.example', amountCents: 600, senderItemId: 'a', recipient: 'a@example.com', status: 'SUCCESS' },
+    { retailer: 'b.example', amountCents: 400, senderItemId: 'b', recipient: 'b@example.com', status: 'SUCCESS' },
+  ] } }]
+  let remote = []
+  let refund
+  const s = setup((name, args) => {
+    if (name === 'get_order') return paypalOrder(remote)
+    if (name === 'create_refund') {
+      refund = { id: 'supplier-refund', status: 'COMPLETED', amount: args.amount, invoice_id: args.invoice_id,
+        links: [{ rel: 'up', href: 'https://api-m.sandbox.paypal.com/v2/payments/captures/capture1' }] }
+      remote = [refund]
+      return refund
+    }
+    if (name === 'get_refund') return refund
+    throw Error('Unexpected call: ' + name)
+  })
+  await assert.rejects(s.prepareFinance(c, { kind: 'refund', orderId: order.id, refundScope: 'supplier', supplier: 'invented' }), /No refundable/)
+  const a = await s.prepareFinance(c, { kind: 'refund', orderId: order.id, refundScope: 'supplier', supplier: 'a.example' })
+  const stale = await s.prepareFinance(c, { kind: 'refund', orderId: order.id, refundScope: 'supplier', supplier: 'a.example' })
+  assert.equal(a.amountCents, 600)
+  assert.deepEqual(a.allocations, [{ retailer: 'a.example', amountCents: 600 }])
+  const result = await s.confirmFinance(c, a.token)
+  c.refunds = [result.refund]
+  const { refundBalances } = load('lib/refund-allocation.ts', {})
+  assert.deepEqual(refundBalances(c.orders[0], c.refunds), [{ retailer: 'a.example', amountCents: 0 }, { retailer: 'b.example', amountCents: 400 }])
+  await assert.rejects(s.confirmFinance(c, stale.token), /Supplier refundable amount changed/)
+  await assert.rejects(s.prepareFinance(c, { kind: 'refund', orderId: order.id, refundScope: 'supplier', supplier: 'a.example' }), /No refundable/)
+  const all = await s.prepareFinance(c, { kind: 'refund', orderId: order.id, refundScope: 'all' })
+  assert.equal(all.amountCents, 400)
+  assert.deepEqual(all.allocations, [{ retailer: 'b.example', amountCents: 400 }])
+  await s.confirmFinance(c, a.token)
+  assert.equal(s.calls.filter(call => call.name === 'create_refund').length, 1)
+})
+
+test('refund allocation preserves cents and reserves pending but releases failed refunds', () => {
+  const { refundBalances, splitRefund } = load('lib/refund-allocation.ts', {})
+  const o = { id: 'o', payouts: { items: [{ retailer: 'a', amountCents: 67 }, { retailer: 'b', amountCents: 46 }] } }
+  assert.deepEqual(splitRefund(o.payouts.items, 113), o.payouts.items)
+  const shares = splitRefund(o.payouts.items, 11)
+  assert.equal(shares.reduce((sum, s) => sum + s.amountCents, 0), 11)
+  const refunds = [{ orderId: 'o', amountCents: 67, allocations: [{ retailer: 'a', amountCents: 67 }], status: 'PENDING' }]
+  assert.deepEqual(refundBalances(o, refunds), [{ retailer: 'a', amountCents: 0 }, { retailer: 'b', amountCents: 46 }])
+  assert.deepEqual(refundBalances(o, [{ ...refunds[0], status: 'FAILED' }]), o.payouts.items)
+  assert.equal(refundBalances(o, [{ orderId: 'o', amountCents: 11, status: 'COMPLETED' }]).reduce((sum, b) => sum + b.amountCents, 0), 102)
+})
+
+test('supplier attribution recovers from signed intent after a lost response', () => {
+  const { refundAttribution } = setup(() => {})
+  const c = campaign()
+  const allocations = [{ retailer: 'a.example', amountCents: 600 }]
+  c.financeOperations = [{ id: 'op', action: { token: sign({ kind: 'refund', campaignId: c.id, operationId: 'op', captureId: 'capture1', allocations }) } }]
+  assert.deepEqual(refundAttribution(c, 'op', 'capture1'), allocations)
+  assert.equal(refundAttribution(c, 'op', 'other-capture'), undefined)
+  assert.equal(refundAttribution(c, 'unknown', 'capture1'), undefined)
+})
+
+test('legacy partial refund shares remain stable after a supplier refund', () => {
+  const { refundBalances } = load('lib/refund-allocation.ts', {})
+  const o = { id: 'o', payouts: { items: [{ retailer: 'a', amountCents: 600 }, { retailer: 'b', amountCents: 400 }] } }
+  const legacy = { orderId: 'o', amountCents: 200, status: 'COMPLETED' }
+  assert.deepEqual(refundBalances(o, [legacy]), [{ retailer: 'a', amountCents: 480 }, { retailer: 'b', amountCents: 320 }])
+  assert.deepEqual(refundBalances(o, [legacy, { orderId: 'o', amountCents: 480, status: 'COMPLETED', allocations: [{ retailer: 'a', amountCents: 480 }] }]), [{ retailer: 'a', amountCents: 0 }, { retailer: 'b', amountCents: 320 }])
+})

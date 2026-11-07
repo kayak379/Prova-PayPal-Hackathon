@@ -154,6 +154,7 @@ export type FundingRequest = {
   error?: string
 }
 export type PurchaseRefund = {
+  allocations?: RefundAllocation[]
   id: string
   orderId: string
   captureId: string
@@ -164,6 +165,7 @@ export type PurchaseRefund = {
   proof: string
 }
 export type FinanceAction = {
+  allocations?: RefundAllocation[]
   charges?: { subtotal: number; shipping: number; tax: number; total: number }
   orderId?: string
   captureId?: string
@@ -177,6 +179,7 @@ export type FinanceAction = {
   title: string
   items?: PlanItem[]
 }
+export type RefundAllocation = { retailer: string; amountCents: number }
 export type FinanceOperation = {
   id: string
   action: FinanceAction

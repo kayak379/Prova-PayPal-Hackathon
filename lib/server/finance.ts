@@ -12,6 +12,8 @@ import { invoiceQr } from './invoice-qr'
 import type { PoolClient } from 'pg'
 import { recoverCheckout } from './checkout-persistence'
 import { invoicePayment, refundDetails, usdCents } from './paypal-verification'
+import { refundBalances, splitRefund } from '../refund-allocation'
+import type { RefundAllocation } from '../types'
 const cents = (value: unknown) => Math.round(Number(value || 0) * 100)
 const money = (value: number) => ({
   currency_code: 'USD',
@@ -51,6 +53,28 @@ export async function orderDetails(c: Campaign, orderId: string) {
     ),
   }
 }
+export function refundAttribution(c: Campaign, operationId: string, captureId: string): RefundAllocation[] | undefined {
+  const operation = c.financeOperations?.find(op => op.id === operationId)
+  if (!operation) return
+  const intent = verify<any>(operation.action.token)
+  if (intent.kind === 'refund' && intent.campaignId === c.id && intent.captureId === captureId && intent.operationId === operationId)
+    return intent.allocations
+}
+
+async function verifiedRefunds(c: Campaign, state: Awaited<ReturnType<typeof orderDetails>>): Promise<PurchaseRefund[]> {
+  const records: PurchaseRefund[] = []
+  for (const remote of state.refunds) {
+    const details = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(remote.id))
+    const local = c.refunds?.find(r => r.id === remote.id)
+    const allocations = local?.allocations || refundAttribution(c, details.invoice_id, state.capture.id)
+    records.push({ ...local, id: remote.id, orderId: state.order.id, captureId: state.capture.id,
+      amountCents: refundDetails(details, remote.id, state.capture.id), status: details.status,
+      operationId: details.invoice_id || remote.id, proof: local?.proof || '', allocations })
+  }
+  // Locally pending refunds reserve their share even before discovery in PayPal's order response.
+  return [...records, ...(c.refunds || []).filter(r => r.orderId === state.order.id && !records.some(remote => remote.id === r.id))]
+}
+
 export async function prepareFinance(
   c: Campaign,
   input: any,
@@ -59,7 +83,22 @@ export async function prepareFinance(
   let payload: any
   if (input.kind === 'refund') {
     const result = await orderDetails(c, input.orderId)
-    const amount = input.full ? result.remaining : input.amountCents
+    let amount = input.full ? result.remaining : input.amountCents
+    let allocations: RefundAllocation[] | undefined
+    if (input.refundScope !== undefined) {
+      if (!['all', 'supplier'].includes(input.refundScope)) throw new Error('Choose a refund scope.')
+      const order = c.orders.find(o => o.id === input.orderId)!
+      const balances = refundBalances(order, await verifiedRefunds(c, result))
+      if (input.refundScope === 'supplier') {
+        const supplier = balances.find(b => b.retailer === input.supplier)
+        if (!supplier || supplier.amountCents <= 0) throw new Error('No refundable funds remain for this supplier.')
+        amount = supplier.amountCents
+        allocations = [{ ...supplier }]
+      } else if (balances.length) {
+        amount = result.remaining
+        allocations = splitRefund(balances, amount)
+      }
+    }
     if (
       !Number.isSafeInteger(amount) ||
       amount <= 0 ||
@@ -74,6 +113,7 @@ export async function prepareFinance(
       captureId: result.capture.id,
       amountCents: amount,
       reason: String(input.reason || '').slice(0, 200),
+      allocations,
     }
   } else if (input.kind === 'invoice') {
     let products: PlanItem[]
@@ -169,7 +209,8 @@ export async function prepareFinance(
     title:
       payload.kind === 'invoice'
         ? `Funding request for ${payload.sponsor}`
-        : 'Refund purchase',
+        : payload.allocations?.length === 1 ? `Refund ${payload.allocations[0].retailer}` : input.refundScope === 'all' ? 'Refund entire purchase' : 'Refund purchase',
+    allocations: payload.allocations,
     items: payload.items,
     charges: payload.charges,
     emailInvoice: payload.emailInvoice,
@@ -284,6 +325,13 @@ export async function confirmFinance(c: Campaign, token: string) {
     }
   }
   if (!refund) {
+    if (action.allocations) {
+      const balances = refundBalances(c.orders.find(o => o.id === action.orderId)!, await verifiedRefunds(c, state))
+      if (action.allocations.reduce((sum: number, share: RefundAllocation) => sum + share.amountCents, 0) !== action.amountCents ||
+          action.allocations.some((share: RefundAllocation) => !Number.isSafeInteger(share.amountCents) || share.amountCents <= 0 ||
+            share.amountCents > (balances.find(b => b.retailer === share.retailer)?.amountCents ?? 0)))
+        throw new Error('Supplier refundable amount changed. Review a new refund.')
+    }
     if (action.amountCents > state.remaining)
       throw new Error('Refund exceeds available funds.')
     refund = await paypal(
@@ -315,6 +363,7 @@ export async function confirmFinance(c: Campaign, token: string) {
     amountCents: cents(refund.amount.value),
     status: refund.status,
     reason: action.reason,
+    allocations: action.allocations,
     proof: sign({
       kind: 'refund',
       campaignId: c.id,
@@ -401,6 +450,7 @@ export async function refreshRefund(c: Campaign, id: string) {
   return {
     ...local,
     status: data.status,
+    allocations: local.allocations || refundAttribution(c, data.invoice_id, ref.captureId),
     amountCents: refundDetails(data, ref.id, ref.captureId, local.amountCents),
   }
 }
@@ -427,6 +477,7 @@ export async function reconcile(c: Campaign, client?: PoolClient) {
         const details = await paypalRest('/v2/payments/refunds/' + encodeURIComponent(r.id))
         const record = {
           id: r.id,
+          allocations: refunds[existing]?.allocations || refundAttribution(c, details.invoice_id, state.capture.id),
           status: details.status,
           amountCents: refundDetails(details, r.id, state.capture.id, refunds[existing]?.amountCents),
           operationId: refunds[existing]?.operationId || r.id,

@@ -6,7 +6,7 @@ import { campaign, saveCampaign } from './workspace'
 import { paypalRest } from './paypal'
 import { linkedCapture, refundDetails, usdCents } from './paypal-verification'
 import { recoverCheckout } from './checkout-persistence'
-import { refreshInvoice } from './finance'
+import { refreshInvoice, refundAttribution } from './finance'
 import { applyFinance } from './finance-persistence'
 
 type Event = { id: string; event_type: string; resource: Record<string, any> }
@@ -131,6 +131,7 @@ async function updateFromPayPal(client: PoolClient, event: Event) {
     throw new Error('Refund amount or capture mismatch.')
   const record: PurchaseRefund = {
     ...existing, id, captureId, orderId: local.id, amountCents,
+    allocations: existing?.allocations || refundAttribution(current, refund.invoice_id, captureId),
     status: refund.status, operationId: existing?.operationId || refund.invoice_id || id,
     proof: sign({ kind: 'refund', campaignId: current.id, id, orderId: local.id, captureId }),
   }

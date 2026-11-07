@@ -26,6 +26,7 @@ import { FundingGraphic } from './funding-graphic'
 import { FinanceMoney } from './finance-money'
 import { PayPalWordmark } from '../brand'
 import { FundingReview } from './funding-review'
+import { RefundFlow } from './refund-flow'
 const dollars = (c: number) => usdPrecise(c / 100)
 const upsert = <T extends { id: string }>(list: T[], item: T) => [
   ...list.filter((i) => i.id !== item.id),
@@ -59,9 +60,6 @@ export function FinancePanel({
   const [sponsor, setSponsor] = useState('')
   const [email, setEmail] = useState('')
   const [emailInvoice, setEmailInvoice] = useState(false)
-  const [full, setFull] = useState(true)
-  const [amount, setAmount] = useState('')
-  const [reason, setReason] = useState('')
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
   const reducedMotion = useReducedMotion()
@@ -173,26 +171,17 @@ export function FinancePanel({
     setPrepared(null)
     if (result.funding) await publish(result.funding.id)
   }
-  async function prepare(kind: 'invoice' | 'refund') {
-    const input =
-      kind === 'invoice'
-        ? {
-            kind,
-            source,
-            sponsor,
-            email: emailInvoice ? email : '',
-            emailInvoice,
-            items: products
-              .map((p) => ({ id: p.id, qty: selected[p.id] ?? p.qty }))
-              .filter((p) => p.qty > 0),
-          }
-        : {
-            kind,
-            orderId,
-            full,
-            amountCents: Math.round(Number(amount) * 100),
-            reason,
-          }
+  async function prepareInvoice() {
+    const input = {
+      kind: 'invoice',
+      source,
+      sponsor,
+      email: emailInvoice ? email : '',
+      emailInvoice,
+      items: products
+        .map((p) => ({ id: p.id, qty: selected[p.id] ?? p.qty }))
+        .filter((p) => p.qty > 0),
+    }
     setPrepared((await api('prepare', { input })).prepared)
   }
   async function ask() {
@@ -364,6 +353,7 @@ export function FinancePanel({
       </Card>
     )
   }
+  if (mode === 'refund') return <RefundFlow campaign={campaign} orderId={refundOrderId || orderId} />
   return (
     <div className="flex flex-col gap-5">
       {error && (
@@ -581,7 +571,7 @@ export function FinancePanel({
                 !sponsor.trim() ||
                 (emailInvoice && !email.trim())
               }
-              onClick={() => work(() => prepare('invoice'))}
+              onClick={() => work(() => prepareInvoice())}
               className="self-end"
             >
               Review request <ArrowRight />
@@ -698,139 +688,6 @@ export function FinancePanel({
             ))}
           </div>
         </div>
-      )}
-      {mode === 'refund' && (
-        <Card className="flex flex-col gap-5 p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-brand">
-              <ReceiptText className="size-5" />
-            </span>
-            <div>
-              <h3 className="font-serif text-2xl tracking-tight">
-                Request a refund
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Review the amount before confirming a refund.
-              </p>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="refund-purchase">Purchase</Label>
-            <select
-              id="refund-purchase"
-              aria-label="Refund purchase"
-              className={inputClass}
-              value={orderId}
-              disabled={busy}
-              onChange={(e) => {
-                setOrderId(e.target.value)
-                setPrepared(null)
-              }}
-            >
-              {campaign.orders.map((o) => (
-                <option value={o.id} key={o.id}>
-                  {o.id}
-                </option>
-              ))}
-            </select>
-          </div>
-          <fieldset>
-            <legend className="mb-2 text-xs font-medium text-muted-foreground">
-              Refund amount
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {[
-                {
-                  value: true,
-                  title: 'Full refund',
-                  detail: 'All remaining refundable funds',
-                },
-                {
-                  value: false,
-                  title: 'Partial refund',
-                  detail: 'Enter an exact USD amount',
-                },
-              ].map((option) => (
-                <label
-                  key={option.title}
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${full === option.value ? 'border-brand bg-brand-soft/40' : 'border-border hover:bg-muted/40'}`}
-                >
-                  <input
-                    type="radio"
-                    name={`refund-mode-${campaign.id}-${orderId}`}
-                    checked={full === option.value}
-                    disabled={busy}
-                    onChange={() => {
-                      setFull(option.value)
-                      setPrepared(null)
-                    }}
-                    className="mt-1 accent-brand"
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">
-                      {option.title}
-                    </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {option.detail}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          {!full && (
-            <div>
-              <Label htmlFor="refund-amount">Amount in USD</Label>
-              <input
-                id="refund-amount"
-                aria-label="Refund amount USD"
-                className={inputClass}
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={amount}
-                disabled={busy}
-                onChange={(e) => {
-                  setAmount(e.target.value)
-                  setPrepared(null)
-                }}
-                placeholder="0.00"
-              />
-            </div>
-          )}
-          <div>
-            <Label htmlFor="refund-reason">
-              Reason <span className="font-normal">(optional)</span>
-            </Label>
-            <input
-              id="refund-reason"
-              aria-label="Refund reason"
-              className={inputClass}
-              placeholder="Reason (optional)"
-              value={reason}
-              disabled={busy}
-              onChange={(e) => {
-                setReason(e.target.value)
-                setPrepared(null)
-              }}
-            />
-          </div>
-          <Pressable
-            disabled={
-              busy ||
-              !orderId ||
-              (!full &&
-                (!Number.isFinite(Number(amount)) || Number(amount) <= 0))
-            }
-            className="self-end"
-            onClick={() => work(() => prepare('refund'))}
-          >
-            Review refund <ArrowRight />
-          </Pressable>
-          {(campaign.refunds || [])
-            .filter((r) => r.orderId === orderId)
-            .map(refundResult)}
-        </Card>
       )}
       {mode === 'finance' && (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
