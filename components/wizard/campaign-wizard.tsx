@@ -13,6 +13,7 @@ import { StepCampaign } from './step-campaign'
 import { StepRequest } from './step-request'
 import { StepReview } from './step-review'
 import { StepCheckout } from './step-checkout'
+import { DisasterContext } from '../campaign/disaster-context'
 import { campaignSpent } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import type { Plan } from '@/lib/types'
@@ -144,6 +145,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
         </aside>
 
         <section className="relative min-w-0">
+          {existing?.disaster && <div className="mb-6"><DisasterContext disaster={existing.disaster} /></div>}
           <AnimatePresence mode="wait" custom={dir} initial={false}>
             <motion.div
               key={step}
@@ -198,6 +200,7 @@ export function CampaignWizard({ existingId }: { existingId?: string }) {
               )}
               {step === 2 && plan && (
                 <StepReview
+                  enforceExpiry={Boolean(existing?.disaster)}
                   onBusyChange={setDiscovering}
                   plan={plan}
                   setPlan={setPlan}

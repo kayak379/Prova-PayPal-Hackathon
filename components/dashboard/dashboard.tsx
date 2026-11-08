@@ -7,6 +7,7 @@ import { AnimatedNumber, PressableLink } from '../kit'
 import { FolderGroup } from './folder-group'
 import { NewFolderButton } from './new-folder-button'
 import { DashboardGraphic } from './dashboard-graphic'
+import { ProactiveResponses } from './proactive-responses'
 import { campaignSpent, usd } from '@/lib/format'
 import { useStore } from '@/lib/store'
 
@@ -59,6 +60,8 @@ export function Dashboard() {
           ))}
         </dl>
       </div>
+
+      <ProactiveResponses />
 
       <motion.div layout className="mt-8 flex flex-col gap-3">
         {folders.map((f, i) => (

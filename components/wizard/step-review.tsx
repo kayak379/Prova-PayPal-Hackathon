@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, ArrowUp, Minus, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatedNumber, Card, Pressable } from '../kit'
 import { softSpring } from '../motion-provider'
 import { estimatedPlan as recalcPlan } from '@/lib/money'
@@ -10,6 +10,7 @@ import { requestPlan } from '@/lib/discovery-client'
 import { planTotals, usdPrecise } from '@/lib/format'
 import type { Plan } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { proposalExpires } from '@/lib/proactive'
 
 export function StepReview({
   plan,
@@ -19,6 +20,7 @@ export function StepReview({
   onBack,
   onNext,
   onBusyChange,
+  enforceExpiry = false,
 }: {
   plan: Plan
   setPlan: (p: Plan) => void
@@ -27,7 +29,14 @@ export function StepReview({
   onBack: () => void
   onNext: () => void
   onBusyChange: (busy: boolean) => void
+  enforceExpiry?: boolean
 }) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const expired = enforceExpiry && proposalExpires(plan) <= now
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [revising, setRevising] = useState(false)
@@ -65,8 +74,30 @@ export function StepReview({
     }
   }
 
+  const refreshPrices = async () => {
+    if (revisionLock.current) return
+    revisionLock.current = true
+    onBusyChange(true)
+    setRevising(true)
+    setError('')
+    setRevisionProgress('Refreshing catalog prices…')
+    try {
+      const selections = plan.items.map(item => ({ name: item.name, quantity: item.qty }))
+      const next = await requestPlan({ prompt: `${prompt}\nCurrent reviewed selections (retain where available and within budget): ${JSON.stringify(selections)}`.slice(0, 12000), budget }, (_, detail) => setRevisionProgress(detail))
+      setPlan(next)
+      setNow(Date.now())
+      setRevision(null)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not refresh proposal.') }
+    finally { revisionLock.current = false; setRevising(false); onBusyChange(false) }
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      {plan.mock && <p role="status" className="rounded-xl border border-border p-4 text-sm">Demo proposal: products and prices are mock data. {plan.fallbackReason}</p>}
+      {expired && <div role="alert" className="rounded-xl border border-border p-4 text-sm">
+        <p>These prices have expired. Refresh the proposal and review any changes before checkout. Your current selections remain saved until a replacement is ready.</p>
+        <Pressable className="mt-3" variant="secondary" disabled={revising} onClick={refreshPrices}>Refresh proposal</Pressable>
+      </div>}
       {error && <p role="alert" className="text-destructive">{error}</p>}
       {revision && revision.after === plan && <RevisionSummary before={revision.before} after={revision.after} request={revision.request} budget={budget} />}
       <div className="flex items-end justify-between gap-4">
@@ -226,7 +257,7 @@ export function StepReview({
               </p>
             </div>
 
-            <Pressable size="lg" className="mt-5 w-full" disabled={revising || over || plan.items.length === 0} onClick={onNext}>
+            <Pressable size="lg" className="mt-5 w-full" disabled={revising || expired || over || plan.items.length === 0} onClick={onNext}>
               Checkout <ArrowRight />
             </Pressable>
             <Pressable variant="ghost" size="sm" className="mt-2 w-full" disabled={revising} onClick={onBack}>

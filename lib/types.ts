@@ -1,4 +1,7 @@
 export type Settings = {
+  proactive?: ProactiveSettings
+  shippingLocation?: ShippingLocation
+  proactiveRevision?: number
   retailerRecipients?: RetailerRecipient[]
   paypalEmail?: string
   orgName: string
@@ -81,6 +84,7 @@ export type AuditEntry = {
 }
 
 export type Campaign = {
+  disaster?: DisasterProvenance
   deletedAt?: number
   version?: number
   demo?: boolean
@@ -101,6 +105,27 @@ export type Campaign = {
   verification?: FinanceVerification
   financeOperations?: FinanceOperation[]
   audit: AuditEntry[]
+}
+
+export type ShippingLocation = { address: string; matchedAddress: string; latitude: number; longitude: number }
+export type ProactiveSettings = {
+  enabled: boolean; radiusMiles: number; budget: number; people: number; days: number; folderId: string
+}
+export type DisasterEvent = {
+  source: string; eventId: string; updatedAt: string; occurredAt: string
+  type: string; title: string; description: string; latitude: number; longitude: number; sourceUrl?: string
+}
+export type ResponseSnapshot = {
+  address: string; taxId: string; proactive: ProactiveSettings; location: ShippingLocation; revision: number
+}
+export type DisasterProvenance = {
+  event: DisasterEvent; distanceMiles: number; assumptions: ResponseSnapshot; summary: string
+}
+export type ProactiveResponse = {
+  id: string; event: DisasterEvent
+  status: 'ignored' | 'queued' | 'processing' | 'failed' | 'cancelled' | 'ready'
+  progress: string; error?: string; distanceMiles?: number; campaignId?: string
+  snapshot?: ResponseSnapshot; total?: number; mock?: boolean
 }
 
 export type Workspace = {

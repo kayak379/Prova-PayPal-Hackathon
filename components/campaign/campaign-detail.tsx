@@ -13,6 +13,7 @@ import { PurchasesGraphic } from './purchases-graphic'
 import { OrdersList } from './orders-list'
 import { FinancePanel } from './finance-panel'
 import { AuditLog } from './audit-log'
+import { DisasterContext } from './disaster-context'
 import { campaignSpent, usd } from '@/lib/format'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -106,6 +107,7 @@ export function CampaignDetail({ id }: { id: string }) {
         view.
       </p>
 
+      {campaign.disaster && <DisasterContext disaster={campaign.disaster} />}
       <section
         aria-label="Campaign overview"
         className="mt-8 overflow-hidden rounded-2xl border border-border bg-card"

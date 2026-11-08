@@ -62,6 +62,8 @@ flowchart LR
 
 ## Shared PostgreSQL workspace
 
+Prova also supports opt-in [webhook-triggered proactive campaigns](docs/proactive-campaigns.md): a persistent worker filters incoming disaster events by distance from the default shipping address, interprets supply needs, and prepares a campaign through the existing discovery service. Operators review and approve payment through the existing wizard. Start locally with `pnpm disasters:worker`; the webhook sender/demo HTML is separate.
+
 PostgreSQL is the source of truth for the shared campaign workspace. The browser loads it through `GET /api/workspace` and queues edits through `POST /api/workspace`; React context holds the current view. Only the theme preference remains in `localStorage`. Discovery returns signed proposals to the browser, which saves them through the workspace API before checkout. Finance and checkout routes load authoritative campaigns from SQL rather than trusting campaign records submitted by the browser. [Browser store](lib/store.tsx) · [Workspace service](lib/server/workspace.ts)
 
 | Table | Stored data |

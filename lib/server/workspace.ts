@@ -3,6 +3,9 @@ import type { Campaign, Folder, Workspace } from '../types'
 import { campaignSpent } from '../format'
 import { database, transaction } from './db'
 import { retailerRecipients } from '../retailer-payouts'
+import { geocodeAddress } from './geocoding'
+import { proactiveDefaults } from '../proactive'
+import type { ProactiveSettings, Settings } from '../types'
 
 export class Conflict extends Error {}
 
@@ -90,13 +93,29 @@ export async function mutate(input: any) {
       if (input.version !== row.version) {
         throw new Conflict('Settings changed in another browser. Reload and try again.')
       }
-      const settings = {
+      const settings: Settings = {
         orgName: requiredText(input.settings.orgName),
         taxId: String(input.settings.taxId || '').slice(0, 100),
         address: String(input.settings.address || '').slice(0, 1000),
         paypalEmail: String(input.settings.paypalEmail || '').slice(0, 320),
         retailerRecipients: retailerRecipients(input.settings.retailerRecipients),
       }
+      const previous = row.settings as Settings
+      const raw = input.settings.proactive
+      const proactive: ProactiveSettings = raw === undefined
+        ? previous.proactive ?? proactiveDefaults(row.folders[0]?.id)
+        : { enabled: raw.enabled, radiusMiles: raw.radiusMiles, budget: raw.budget, people: raw.people, days: raw.days, folderId: raw.folderId }
+      if (typeof proactive.enabled !== 'boolean' || !Number.isFinite(proactive.radiusMiles) || proactive.radiusMiles <= 0 || proactive.radiusMiles > 12500 ||
+        !Number.isFinite(proactive.budget) || proactive.budget <= 0 || proactive.budget > 1e9 ||
+        !Number.isSafeInteger(proactive.people) || proactive.people < 1 || proactive.people > 1000000 ||
+        !Number.isSafeInteger(proactive.days) || proactive.days < 1 || proactive.days > 365 ||
+        (proactive.enabled && !row.folders.some((f: Folder) => f.id === proactive.folderId))) throw new Error('Enter valid proactive response defaults and choose a destination folder.')
+      settings.proactive = proactive
+      // Coordinates and revision are server-owned. Never trust browser-submitted values.
+      settings.shippingLocation = previous.shippingLocation?.address === settings.address ? previous.shippingLocation : undefined
+      if (proactive.enabled && !settings.shippingLocation) settings.shippingLocation = await geocodeAddress(settings.address)
+      const changed = (Object.keys(proactive) as (keyof ProactiveSettings)[]).some(key => previous.proactive?.[key] !== proactive[key]) || previous.address !== settings.address || previous.taxId !== settings.taxId
+      settings.proactiveRevision = (previous.proactiveRevision ?? 0) + (changed ? 1 : 0)
       await client.query("UPDATE workspace SET settings=$1, version=version+1 WHERE id='demo'", [
         JSON.stringify(settings),
       ])
