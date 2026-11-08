@@ -1,7 +1,8 @@
 # Prova system architecture
 
-Prova uses AI to plan disaster relief purchases and help operators manage campaign finances. Both agents use OpenRouter and Gemini, with different roles for the model in each workflow. Prova uses the PayPal Developer Platform to turn approved supply plans into Sandbox payments and help operators request sponsor funding, issue refunds and verify campaign finances.
+Prova uses AI to prepare responses to nearby disasters, plan relief purchases, and help operators manage campaign finances. Its agents use OpenRouter and Gemini, with different roles for the model in each workflow. Prova uses the PayPal Developer Platform to turn approved supply plans into Sandbox payments and help operators request sponsor funding, issue refunds and verify campaign finances.
 
+- **Proactive disaster response.** Incoming disaster updates are filtered by distance from the organization’s shipping address. A background worker interprets relevant events and passes a supply request into discovery using saved response defaults. Prepared campaigns appear on the dashboard for human review and payment approval. [Proactive workflow](#proactive-campaigns)
 - **Supply discovery agent.** Given a request like “supply 200 people after a flood,” the model plans catalog searches, selects from retrieved products, and proposes quantities and reasons. The server validates the model’s structured output against Channel3 offers and calculates quantities that fit the budget. [Discovery workflow](#supply-discovery-agent)
 - **Finance assistant.** Given a request like “prepare a $20 refund for this purchase,” the model chooses which campaign tools to call, uses the returned PayPal data, and prepares an action for review. The user confirms the action before the server sends a financial write to PayPal. [Finance workflow](#finance-assistant-and-approval-boundary)
 
@@ -12,18 +13,25 @@ flowchart LR
         Request["Campaign request<br/>and proposal review"]
         Approval["Buyer approval<br/>and finance confirmation"]
         Workspace["Campaign workspace<br/>React state"]
+        Responses["Proactive responses<br/>progress · prepared plans · review"]
     end
 
     subgraph Hosting["Render · Ohio private network"]
         subgraph Server["Next.js Node · server routes"]
             direction TB
             WorkspaceAPI["Workspace API<br/>validation · version checks"]
-            Discovery["AI discovery agent<br/>plan → retrieve → select → validate"]
+            DisasterWebhook["Disaster webhook<br/>bearer authentication · event validation"]
+            ResponsesAPI["Disaster response API<br/>status · retry"]
             Assistant["AI finance assistant<br/>choose tools → read results → prepare"]
             Payments["Checkout and finance services<br/>validate → execute → verify"]
             Webhooks["PayPal webhook<br/>signature verification · event handling"]
         end
-        Database[("Managed PostgreSQL<br/>workspace · campaigns (JSONB)<br/>payment attempts · webhook inbox · encrypted wallet")]
+        Worker["Background worker<br/>distance filter · job leases · retries"]
+        subgraph SharedAgents["Shared TypeScript agent services"]
+            Interpreter["AI disaster interpreter<br/>event → needs → supply request"]
+            Discovery["AI discovery agent<br/>plan → retrieve → select → validate"]
+        end
+        Database[("Managed PostgreSQL<br/>workspace · campaigns (JSONB)<br/>disaster event queue · payment attempts<br/>PayPal webhook inbox · encrypted wallet")]
     end
 
     subgraph Providers["External services"]
@@ -31,6 +39,8 @@ flowchart LR
         Models["OpenRouter → Gemini<br/>structured output and function calls"]
         Catalog["Channel3<br/>product offers"]
         PayPal["PayPal Sandbox<br/>Checkout · Vault · Invoicing<br/>Payouts · Refunds · Transaction Search"]
+        DisasterSource["Disaster event sender<br/>event details · coordinates · timestamps"]
+        Geocoder["U.S. Census geocoder<br/>shipping address → coordinates"]
     end
 
     Request <-->|"request ↔ signed proposal"| Discovery
@@ -38,6 +48,18 @@ flowchart LR
     Discovery <-->|"queries and offers"| Catalog
     Workspace <-->|"load and save"| WorkspaceAPI
     WorkspaceAPI <-->|"versioned SQL updates"| Database
+    WorkspaceAPI <-->|"resolve and cache shipping location"| Geocoder
+    DisasterSource -->|"disaster updates"| DisasterWebhook
+    DisasterWebhook -->|"deduplicated event delivery"| Database
+    Worker <-->|"claim jobs · persist progress and campaigns"| Database
+    Worker -->|"eligible event and response defaults"| Interpreter
+    Interpreter <-->|"structured interpretation"| Models
+    Interpreter -->|"supply request and budget"| Discovery
+    Discovery -->|"validated signed proposal"| Worker
+    Responses <-->|"poll status · retry failed responses"| ResponsesAPI
+    ResponsesAPI <-->|"event status and campaign references"| Database
+    Responses -->|"open prepared campaign"| Request
+    Request -->|"review supplies and continue"| Approval
     Approval <-->|"chat and action cards"| Assistant
     Assistant <-->|"function calls"| Models
     Assistant -->|"status and preparation"| Payments
@@ -54,15 +76,24 @@ flowchart LR
     classDef agent fill:#ede9fe,stroke:#6d28d9,color:#3b0764,stroke-width:1.5px
     classDef service fill:#dcfce7,stroke:#15803d,color:#14532d,stroke-width:1.5px
     classDef payment fill:#fef3c7,stroke:#b45309,color:#78350f,stroke-width:2px
-    class Request,Approval,Workspace browser
-    class Discovery,Assistant,Models agent
-    class WorkspaceAPI,Database,Catalog service
+    class Request,Approval,Workspace,Responses browser
+    class Discovery,Interpreter,Assistant,Models agent
+    class WorkspaceAPI,ResponsesAPI,Database,Catalog,Worker,DisasterWebhook,DisasterSource,Geocoder service
     class Payments,PayPal,Webhooks payment
 ```
 
-## Shared PostgreSQL workspace
+## Proactive campaigns
 
-Prova also supports opt-in [webhook-triggered proactive campaigns](docs/proactive-campaigns.md): a persistent worker filters incoming disaster events by distance from the default shipping address, interprets supply needs, and prepares a campaign through the existing discovery service. Operators review and approve payment through the existing wizard. Start locally with `pnpm disasters:worker`; the webhook sender/demo HTML is separate.
+Organizations can enable proactive campaigns and define a response radius, a per-campaign budget, the number of people to supply, the response duration, and a destination folder. The default shipping address is resolved through the U.S. Census geocoder, and its coordinates are cached against that address. People and duration are planning assumptions supplied by the organization, not confirmed measurements of disaster impact.
+
+1. **Receive and filter.** The authenticated `POST /api/disasters/webhook` endpoint validates incoming event details, coordinates, and timestamps and persists them in PostgreSQL. A deterministic distance check identifies events within the configured response radius. Disabled and outside-radius deliveries are recorded as ignored.
+2. **Interpret and source.** A persistent background worker claims eligible events and asks the disaster interpretation agent to translate the report into supply needs. It passes the resulting request and saved budget into the same discovery service used by operator-created campaigns, which retrieves Channel3 offers, validates selections, and signs the resulting proposal.
+3. **Prepare for review.** The worker saves a campaign with its proposal, source event, distance, response assumptions, and audit history. The dashboard shows progress and prepared responses automatically, even when the work began while no browser was open. Operators open the existing supply review, adjust items, and continue to checkout. Payment requires explicit human approval; expired price snapshots require a refreshed proposal.
+4. **Recover consistently.** Event IDs are unique within each source, so repeated deliveries cannot create duplicate campaigns. Newer updates refresh event details without replacing an existing campaign. Renewable job leases and bounded retries recover interrupted work. Before publishing, the worker checks that proactive mode and its response settings still match the claimed job; changed settings cancel that attempt for explicit retry.
+
+[Disaster processing](lib/server/disasters.ts) · [Disaster interpretation](lib/server/disaster-agent.ts) · [Dashboard responses](components/dashboard/proactive-responses.tsx)
+
+## Shared PostgreSQL workspace
 
 PostgreSQL is the source of truth for the shared campaign workspace. The browser loads it through `GET /api/workspace` and queues edits through `POST /api/workspace`; React context holds the current view. Only the theme preference remains in `localStorage`. Discovery returns signed proposals to the browser, which saves them through the workspace API before checkout. Finance and checkout routes load authoritative campaigns from SQL rather than trusting campaign records submitted by the browser. [Browser store](lib/store.tsx) · [Workspace service](lib/server/workspace.ts)
 
@@ -72,27 +103,29 @@ PostgreSQL is the source of truth for the shared campaign workspace. The browser
 | `campaigns` | Campaign JSONB documents containing requests, attachments, proposals, purchases, audit entries, finance messages, pending operations, invoices, refunds and verification results, with a separate record version. |
 | `payment_attempts` | One checkout attempt per campaign, its stable PayPal request ID, pending order and signed recovery ticket in JSONB, and a completion flag. |
 | `paypal_webhook_events` | Signature-verified webhook inbox with a unique event ID, original payload, processing attempts, last error and completion timestamp. |
+| `disaster_events` | Disaster event inbox and durable response queue, including source-scoped event IDs, processing status, settings snapshots, claim leases, retries, progress, and the prepared campaign reference. |
 
 Workspace mutations use SQL transactions and reject stale campaign or settings versions. Campaign payment and finance operations lock the campaign row with `SELECT ... FOR UPDATE`, then save server-verified results in the same transaction. Browser finance saves are limited to messages and operation metadata. Campaign deletion is a soft delete, preserving records needed for pending payment recovery. [Database transactions](lib/server/db.ts) · [Schema migrations](db/migrations)
 
-The [Render Blueprint](render.yaml) provisions the Node web service and managed PostgreSQL in Ohio using an internal `DATABASE_URL`. Its pre-deploy command runs SQL migrations and seeds an uninitialized workspace; later deployments preserve edits. Sample campaigns contain synthetic data and cannot initiate PayPal operations. An optional encrypted `PAYPAL_DEFAULT_VAULT_WALLET` imports an already-approved sandbox wallet once, preserving deliberate disconnects on subsequent deployments. [Setup and deployment](docs/render-deployment.md)
+The [Render Blueprint](render.yaml) provisions the Node web service, persistent background worker, and managed PostgreSQL in Ohio using an internal `DATABASE_URL`. Its pre-deploy command runs SQL migrations and seeds an uninitialized workspace; later deployments preserve edits. Sample campaigns contain synthetic data and cannot initiate PayPal operations. An optional encrypted `PAYPAL_DEFAULT_VAULT_WALLET` imports an already-approved sandbox wallet once, preserving deliberate disconnects on subsequent deployments. [Setup and deployment](docs/render-deployment.md)
 
 One team email and password are configured through `DEMO_EMAIL` and `DEMO_PASSWORD`. Sign-in issues a signed HttpOnly session cookie valid for 24 hours. The Next.js proxy checks sessions and the origin of browser mutations. API rate limits are shared per server process: 120 requests per minute overall, 10 login attempts, and 10 discovery/finance-chat requests combined; excess requests receive `429` with `Retry-After`. These counters reset on restart and are independent across instances. The app has one shared identity, without individual accounts or organization isolation. [Proxy](proxy.ts) · [Sessions](lib/server/session.ts) · [Rate limits](lib/server/rate-limit.ts)
 
 ## Custom TypeScript agent orchestration
 
-Prova implements its agent orchestration in TypeScript behind two Next.js API routes. Discovery uses a pipeline defined in code. The server alternates structured model calls with catalog search, validates the returned product references, and calculates quantities. Finance uses a bounded tool loop. The model chooses a campaign function, the server runs it, and the result goes back to the model for its next decision. Checkout and financial writes stay in server services that run after user approval.
+Prova implements its agent orchestration in TypeScript through Next.js API routes and a persistent background worker. The worker interprets eligible disaster reports with a structured model call, then invokes the shared discovery pipeline. Discovery uses a pipeline defined in code. The server alternates structured model calls with catalog search, validates the returned product references, and calculates quantities. Finance uses a bounded tool loop. The model chooses a campaign function, the server runs it, and the result goes back to the model for its next decision. Checkout and financial writes stay in server services that run after user approval.
 
 | Agent | Primary model via OpenRouter | Fallback model via Gemini API |
 | --- | --- | --- |
+| Disaster interpretation | NVIDIA Nemotron, `nvidia/nemotron-3.5-super-vl:free` | Gemini Flash, `gemini-3.5-flash` |
 | Supply discovery | NVIDIA Nemotron, `nvidia/nemotron-3.5-super-vl:free` | Gemini Flash, `gemini-3.5-flash` |
 | Finance assistant | NVIDIA Nemotron, `nvidia/nemotron-3.5-super-vl:free` | Gemini Flash, `gemini-3.5-flash` |
 
-These are the default model IDs sent by the application. Both agents read `OPENROUTER_MODEL` and `GEMINI_MODEL` for overrides. [Discovery provider calls](lib/server/discovery.ts) · [Finance provider calls](lib/server/finance-agent.ts)
+These are the default model IDs sent by the application. All three read `OPENROUTER_MODEL` and `GEMINI_MODEL` for overrides. [Shared structured model calls](lib/server/model.ts) · [Discovery orchestration](lib/server/discovery.ts) · [Finance provider calls](lib/server/finance-agent.ts)
 
 ### OpenRouter to Gemini fallback
 
-Each discovery run and finance message starts on OpenRouter. The shared retry helper allows up to three attempts per model request, with waits of one and two seconds. If OpenRouter exhausts its attempts, the server switches to Gemini for the rest of that run or message. Discovery can also rerun on Gemini if OpenRouter returns unusable search planning or its product selection still fails validation after repair. [Retry helper](lib/server/ai-retry.ts) · [Discovery fallback](lib/server/discovery.ts)
+Each disaster interpretation, discovery run, and finance message starts on OpenRouter. The shared retry helper allows up to three attempts per model request, with waits of one and two seconds. If OpenRouter exhausts its attempts, the server switches to Gemini for the rest of that run or message. Discovery can also rerun on Gemini if OpenRouter returns unusable search planning or its product selection still fails validation after repair. [Retry helper](lib/server/ai-retry.ts) · [Discovery fallback](lib/server/discovery.ts)
 
 ## Supply discovery agent
 
