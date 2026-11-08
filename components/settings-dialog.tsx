@@ -9,7 +9,6 @@ import { PayPalWordmark } from './brand'
 import { Modal } from './modal'
 import { LogoutButton } from './logout-button'
 import { useStore } from '@/lib/store'
-import { proactiveDefaults } from '@/lib/proactive'
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
@@ -20,8 +19,8 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
 }
 
 function SettingsForm({ onClose }: { onClose: () => void }) {
-  const { settings, folders, updateSettings } = useStore()
-  const [form, setForm] = useState(() => ({ ...settings, proactive: settings.proactive ?? proactiveDefaults(folders[0]?.id) }))
+  const { settings, updateSettings } = useStore()
+  const [form, setForm] = useState(settings)
   const [wallet, setWallet] = useState<{ saved: boolean; email?: string }>({ saved: false })
   const [walletBusy, setWalletBusy] = useState(false)
   const [walletError, setWalletError] = useState('')
@@ -131,37 +130,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
           onChange={(e) => setForm({ ...form, address: e.target.value })}
         />
       </div>
-      <fieldset className="flex flex-col gap-3 rounded-2xl border border-border p-4">
-        <legend className="px-1 text-sm font-medium">Proactive campaigns</legend>
-        <label className="flex items-center gap-3 text-sm font-medium">
-          <input type="checkbox" checked={form.proactive.enabled} onChange={e => setForm({ ...form, proactive: { ...form.proactive, enabled: e.target.checked } })} />
-          Prepare campaigns for nearby disasters
-        </label>
-        <p className="text-xs text-muted-foreground">Prova prepares supply plans automatically. You review the supplies and approve every payment. Uses your default U.S. shipping address.</p>
-        {form.shippingLocation?.address === form.address && <p className="text-xs text-muted-foreground">Matched address: {form.shippingLocation.matchedAddress}</p>}
-        {form.proactive.enabled && form.shippingLocation?.address !== form.address && <p className="text-xs text-muted-foreground">Your address will be verified when you save.</p>}
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            ['radiusMiles', 'Radius (miles)', 12500, 'any'],
-            ['budget', 'Budget per response ($)', 1000000000, '0.01'],
-            ['people', 'People to supply', 1000000, '1'],
-            ['days', 'Response duration (days)', 365, '1'],
-          ] as const).map(([key, label, max, step]) => <div key={key}>
-            <Label htmlFor={`proactive-${key}`}>{label}</Label>
-            <input id={`proactive-${key}`} className={inputClass} type="number" min={key === 'budget' || key === 'radiusMiles' ? 0.01 : 1} max={max} step={step} required
-              value={form.proactive[key]} onChange={e => setForm({ ...form, proactive: { ...form.proactive, [key]: Number(e.target.value) } })} />
-          </div>)}
-        </div>
-        <div>
-          <Label htmlFor="proactive-folder">Destination folder</Label>
-          <select id="proactive-folder" className={inputClass} value={form.proactive.folderId} required={form.proactive.enabled}
-            onChange={e => setForm({ ...form, proactive: { ...form.proactive, folderId: e.target.value } })}>
-            {!folders.length && <option value="">Create a folder first</option>}
-            {folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-          </select>
-        </div>
-        <p className="text-xs text-muted-foreground">People and duration are planning assumptions, not confirmed disaster impact. Turning this off stops new responses; existing campaigns stay available.</p>
-      </fieldset>
+
       <div className="rounded-2xl border border-paypal-blue/20 bg-paypal-blue/5 p-4">
         <div className="mb-3 flex items-center justify-between"><PayPalWordmark className="text-2xl" /><span className="text-xs text-paypal-wordmark-navy">{wallet.saved ? 'Connected' : 'Not connected'}</span></div>
         <p className="mb-1 truncate text-sm font-medium">{wallet.saved ? wallet.email : 'No PayPal account saved'}</p>

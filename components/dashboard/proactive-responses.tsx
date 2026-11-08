@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Radio } from 'lucide-react'
+import { Radio, Settings } from 'lucide-react'
+import { ProactiveSettingsDialog } from './proactive-settings-dialog'
 import { Pressable, PressableLink } from '../kit'
 import { useStore } from '@/lib/store'
 import { usd } from '@/lib/format'
@@ -12,6 +13,7 @@ export function ProactiveResponses() {
   const [responses, setResponses] = useState<ProactiveResponse[]>([])
   const [error, setError] = useState('')
   const [retrying, setRetrying] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const ready = useRef(new Set<string>())
 
   useEffect(() => {
@@ -64,10 +66,14 @@ export function ProactiveResponses() {
   return <section aria-labelledby="proactive-heading" className="mt-8 rounded-2xl border border-border bg-card p-5 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 id="proactive-heading" className="flex items-center gap-2 font-serif text-2xl"><Radio className="size-5 text-brand" /> Proactive responses</h2>
-      <span className="text-xs text-muted-foreground">{settings.proactive?.enabled ? `Watching within ${settings.proactive.radiusMiles} miles` : 'Automatic preparation off'}</span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">{settings.proactive?.enabled ? `Watching within ${settings.proactive.radiusMiles} miles` : 'Automatic preparation off'}</span>
+        <Pressable type="button" variant="ghost" size="icon" aria-label="Proactive response settings" title="Proactive response settings" onClick={() => setSettingsOpen(true)}><Settings /></Pressable>
+      </div>
     </div>
+    <ProactiveSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
-    {!responses.length && <p className="mt-3 text-sm text-muted-foreground">{settings.proactive?.enabled ? 'Nearby disaster updates will appear here as Prova prepares supply plans for your review.' : 'Enable Proactive campaigns in account settings to prepare responses to nearby disasters.'}</p>}
+    {!responses.length && <p className="mt-3 text-sm text-muted-foreground">{settings.proactive?.enabled ? 'Nearby disaster updates will appear here as Prova prepares supply plans for your review.' : 'Use the settings gear above to enable automatic responses to nearby disasters.'}</p>}
     <div className="mt-4 space-y-3" aria-live="polite">
       {responses.map(response => <article key={response.id} className="rounded-xl border border-border p-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">

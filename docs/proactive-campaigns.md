@@ -9,7 +9,7 @@ Prova can receive disaster updates and prepare supply campaigns while no browser
 1. Configure the existing database, model and Channel3 variables in `.env.local`. `PAYPAL_CLIENT_SECRET` is also required in the worker because existing discovery signs price snapshots with it.
 2. Generate a random server-only `DISASTER_WEBHOOK_SECRET` and add it to `.env.local`. Do not use a `NEXT_PUBLIC_` variable or commit the value.
 3. Run `pnpm db:setup`, then `pnpm dev`. In a second terminal run `pnpm disasters:worker`.
-4. Sign in and open Account settings. Enter a complete U.S. default shipping address. Enable **Proactive campaigns**, choose the radius, budget, people, days and folder, then save. Address validation uses the U.S. Census geocoder and displays the matched address on reopening settings. An unmatched address cannot enable processing.
+4. Sign in and open Account settings. Enter a complete U.S. default shipping address. On the dashboard, open the gear in **Proactive responses**, enable **Proactive campaigns**, choose the radius, budget, people, days and folder, then save. Address validation uses the U.S. Census geocoder and displays the matched address on reopening settings. An unmatched address cannot enable processing.
 5. Send the sample request below. Coordinates describe the event location; the shipping address is the center of the response radius. The sample coordinates are near the Census address `4600 Silver Hill Rd, Washington, DC 20233`.
 
 ```powershell
