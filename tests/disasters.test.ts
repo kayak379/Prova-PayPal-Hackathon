@@ -197,6 +197,23 @@ test('persistent proactive workflow', async t => {
       await save({ shippingLocation: { ...matched!, latitude: 0 } })
       assert.equal(lookups, 1)
       assert.equal((await workspace()).settings.shippingLocation?.latitude, event.latitude)
+      const originalRevision = (await workspace()).settings.proactiveRevision
+      await save({ address: '  4600 Silver Hill Rd  \n Washington , dc20233  ' })
+      assert.equal((await workspace()).settings.address, base.address)
+      assert.equal(lookups, 1, 'Equivalent formatting keeps the verified location')
+      assert.equal((await workspace()).settings.proactiveRevision, originalRevision)
+      await save({ address: '4600 Silver Hill Rd\n Apt 4B\nWashington dc20233' })
+      const formatted = (await workspace()).settings
+      assert.equal(formatted.address, '4600 Silver Hill Rd, Apt 4B, Washington, DC 20233')
+      assert.equal(formatted.shippingLocation?.address, formatted.address)
+      assert.equal(lookups, 2, 'Changed address is geocoded before proactive work resumes')
+      const formattedEvent = await receiveDisaster({ ...event, eventId: 'formatted-address' })
+      assert.equal(formattedEvent.status, 'queued')
+      const formattedJob = (await claimDisaster())!
+      assert.equal(formattedJob.snapshot.address, formatted.address)
+      assert.equal(await publishDisaster(formattedJob, interpretation, plan), true)
+      assert.equal((await workspace()).campaigns.find(c => c.disaster?.event.eventId === 'formatted-address')?.address, formatted.address)
+      await save({ address: base.address })
       const revision = (await workspace()).settings.proactiveRevision!
       await save({ orgName: 'Renamed relief organization' })
       assert.equal((await workspace()).settings.proactiveRevision, revision, 'Unrelated settings must not cancel prepared work')

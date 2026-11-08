@@ -9,6 +9,7 @@ import { PayPalWordmark } from './brand'
 import { Modal } from './modal'
 import { LogoutButton } from './logout-button'
 import { useStore } from '@/lib/store'
+import { formatAddress } from '@/lib/address'
 
 export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
@@ -101,7 +102,7 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
     if (saving) return
     setSaving(true)
     setSaveError('')
-    try { await updateSettings(form) } catch (error) {
+    try { await updateSettings({ ...form, address: formatAddress(form.address) }) } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Could not save settings.')
       setSaving(false)
       return
@@ -128,7 +129,12 @@ function SettingsForm({ onClose }: { onClose: () => void }) {
           className={`${inputClass} h-auto resize-none py-2.5`}
           value={form.address}
           onChange={(e) => setForm({ ...form, address: e.target.value })}
+          onBlur={() => setForm(current => ({ ...current, address: formatAddress(current.address) }))}
+          autoComplete="street-address"
+          placeholder="Street address, City, ST ZIP"
+          aria-describedby="address-format-hint"
         />
+        <p id="address-format-hint" className="mt-1 text-xs text-muted-foreground">Formats automatically when you leave the field. Include city, state, ZIP, and any apartment or unit.</p>
       </div>
 
       <div className="rounded-2xl border border-paypal-blue/20 bg-paypal-blue/5 p-4">

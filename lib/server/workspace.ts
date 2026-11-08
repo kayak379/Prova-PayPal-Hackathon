@@ -4,6 +4,7 @@ import { campaignSpent } from '../format'
 import { database, transaction } from './db'
 import { geocodeAddress } from './geocoding'
 import { proactiveDefaults } from '../proactive'
+import { formatAddress } from '../address'
 import type { ProactiveSettings, Settings } from '../types'
 
 export class Conflict extends Error {}
@@ -95,7 +96,7 @@ export async function mutate(input: any) {
       const settings: Settings = {
         orgName: requiredText(input.settings.orgName),
         taxId: String(input.settings.taxId || '').slice(0, 100),
-        address: String(input.settings.address || '').slice(0, 1000),
+        address: formatAddress(String(input.settings.address || '').slice(0, 1000)),
         paypalEmail: String(input.settings.paypalEmail || '').slice(0, 320),
       }
       const previous = row.settings as Settings
