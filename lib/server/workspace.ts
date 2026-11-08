@@ -2,7 +2,6 @@ import type { PoolClient } from 'pg'
 import type { Campaign, Folder, Workspace } from '../types'
 import { campaignSpent } from '../format'
 import { database, transaction } from './db'
-import { retailerRecipients } from '../retailer-payouts'
 import { geocodeAddress } from './geocoding'
 import { proactiveDefaults } from '../proactive'
 import type { ProactiveSettings, Settings } from '../types'
@@ -98,7 +97,6 @@ export async function mutate(input: any) {
         taxId: String(input.settings.taxId || '').slice(0, 100),
         address: String(input.settings.address || '').slice(0, 1000),
         paypalEmail: String(input.settings.paypalEmail || '').slice(0, 320),
-        retailerRecipients: retailerRecipients(input.settings.retailerRecipients),
       }
       const previous = row.settings as Settings
       const raw = input.settings.proactive

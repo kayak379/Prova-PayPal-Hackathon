@@ -34,9 +34,8 @@ export async function POST(request: Request) {
       })
       const total = totalsCents(selected).total
       if (total > prices.budgetCents || total > financeTotals(current).remaining) throw new Error('Checkout exceeds campaign funds or the proposal budget.')
-      const settings = (await client.query("SELECT settings FROM workspace WHERE id='demo'")).rows[0].settings
       const payoutPlan = {
-        items: allocateRetailerPayouts(selected, settings.retailerRecipients || []),
+        items: allocateRetailerPayouts(selected),
         checkout: { snapshot: body.snapshot, items: body.items.map((item: { id: string; qty: number }) => ({ id: item.id, qty: item.qty })) },
       }
       await client.query(`

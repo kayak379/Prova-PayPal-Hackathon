@@ -123,8 +123,8 @@ test('PostgreSQL workspace integration', async t => {
         assert.equal((await retry.json()).orderId, pending.orderId)
         assert.equal(creates, 1)
         let captured = false
-        const payoutPlan = (await db.query<any>('SELECT attempt_id FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows[0]
-        const payout = { batch_header: { payout_batch_id: 'BATCH1', batch_status: 'SUCCESS', sender_batch_header: { sender_batch_id: payoutPlan.attempt_id } }, items: [{ payout_item_id: 'ITEM1', transaction_status: 'SUCCESS', payout_item: { sender_item_id: 'retailer-1', receiver: 'retailer@sandbox.example', amount: { currency: 'USD', value: '11.30' } } }] }
+        const payoutPlan = (await db.query<any>('SELECT attempt_id, payout_plan FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows[0]
+        const payout = { batch_header: { payout_batch_id: 'BATCH1', batch_status: 'SUCCESS', sender_batch_header: { sender_batch_id: payoutPlan.attempt_id } }, items: [{ payout_item_id: 'ITEM1', transaction_status: 'SUCCESS', payout_item: { sender_item_id: 'retailer-1', receiver: payoutPlan.payout_plan.items[0].recipient, amount: { currency: 'USD', value: '11.30' } } }] }
         globalThis.fetch = async (url, options) => {
           if (String(url).includes('oauth2/token')) return Response.json({ access_token: 'test-token' })
           if (String(url).includes('/v1/payments/payouts')) return Response.json(payout)

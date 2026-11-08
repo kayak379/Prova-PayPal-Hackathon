@@ -36,8 +36,7 @@ export function retailerRecipients(input: unknown): RetailerRecipient[] {
   })
 }
 
-export function allocateRetailerPayouts(items: PlanItem[], recipients: RetailerRecipient[]): RetailerPayout[] {
-  const mapping = new Map(retailerRecipients(recipients).map(r => [r.domain, r.email]))
+export function allocateRetailerPayouts(items: PlanItem[]): RetailerPayout[] {
   const groups = new Map<string, number>()
   for (const item of items) {
     const domain = retailerDomain(item.supplier)
@@ -63,7 +62,7 @@ export function allocateRetailerPayouts(items: PlanItem[], recipients: RetailerR
   const shipping = allocate(totals.shipping)
   const tax = allocate(totals.tax)
   return retailers.map(([domain, subtotal], i) => ({
-    senderItemId: `retailer-${i + 1}`, retailer: domain, recipient: mapping.get(domain) || sandboxRecipient(domain),
+    senderItemId: `retailer-${i + 1}`, retailer: domain, recipient: sandboxRecipient(domain),
     amountCents: subtotal + shipping[i] + tax[i], status: 'QUEUED',
   }))
 }

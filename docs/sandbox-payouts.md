@@ -6,10 +6,9 @@ delivery. No live payment endpoint is used.
 
 ## Setup
 
-1. Run `pnpm db:setup` against the intended database to apply migrations and import
-   the ten sandbox retailer recipients. This also runs automatically before a
-   Render deployment. Existing recipient mappings are preserved; subsequent
-   deployments preserve deliberate edits and removals.
+1. Run `pnpm db:setup` against the intended database to apply migrations. This
+   also runs automatically before a Render deployment. The ten sandbox payout
+   accounts are bundled with the app; no recipient configuration is needed.
 2. In the PayPal Developer Dashboard, use the sandbox app's client ID and secret
    for `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. Ensure the app has Payouts
    access and the sending sandbox business account has enough test balance for
@@ -19,15 +18,14 @@ delivery. No live payment endpoint is used.
    retailer accounts, not the retailers' real PayPal accounts. Any new retailer
    domain is automatically assigned one of these ten accounts using a stable
    domain-based selection. Accounts can be reused across domains; each retailer
-   still receives its own payout item. Optional mappings in account settings
-   override automatic selection. No manual mapping or new account is required.
+   still receives its own payout item. Existing recipient mappings are ignored. No manual mapping or new account
+   is required.
 4. Complete checkout normally with a sandbox buyer account. The same approval
    authorizes the automatic retailer payouts. Test shipping and tax are allocated
    proportionally; payout fees are paid by the sending sandbox account.
 
-Recipients and amounts are frozen when checkout starts. Settings edits apply to
-future checkout attempts. Existing purchases and seeded sample campaigns do not
-receive payouts retroactively.
+Recipients and amounts are frozen when checkout starts. Existing purchases and
+seeded sample campaigns do not receive payouts retroactively.
 
 ## Status and recovery
 

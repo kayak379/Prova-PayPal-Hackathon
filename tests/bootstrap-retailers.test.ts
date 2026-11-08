@@ -13,7 +13,7 @@ test('the ten default sandbox businesses each receive their retailer share', () 
   const payouts = allocateRetailerPayouts(sandboxRetailers.map((r, i) => ({
     id: String(i), name: 'Sandbox supply', supplier: r.domain, category: 'Supplies',
     unitPrice: 1, unitPriceCents: 100, qty: 1, delivery: 'Simulated',
-  })), sandboxRetailers)
+  })))
   assert.equal(payouts.length, 10)
   assert.equal(payouts.reduce((sum, item) => sum + item.amountCents, 0), 1130)
   assert.ok(payouts.every(item => item.amountCents === 113))

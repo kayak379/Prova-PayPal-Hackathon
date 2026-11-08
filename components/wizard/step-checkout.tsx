@@ -70,8 +70,8 @@ export function StepCheckout({
   const totals = totalsCents(plan.items)
   const groups = [...new Set(plan.items.map((p) => p.supplier))]
   let recipientError = ''
-  try { allocateRetailerPayouts(plan.items, settings.retailerRecipients || []) }
-  catch (error) { recipientError = error instanceof Error ? error.message : 'Configure retailer recipients.' }
+  try { allocateRetailerPayouts(plan.items) }
+  catch (error) { recipientError = error instanceof Error ? error.message : 'Unable to prepare sandbox payouts.' }
   useEffect(() => {
     void paypalSDK().catch(() => {})
     fetch('/api/paypal/vault')
@@ -387,7 +387,7 @@ export function StepCheckout({
                   </div>
                 ) : (
                   <>
-                    {recipientError && !pending && <p role="alert" className="mt-4 text-xs text-destructive">{recipientError} <button type="button" className="underline" onClick={() => setSettingsOpen(true)}>Account settings</button></p>}
+                    {recipientError && !pending && <p role="alert" className="mt-4 text-xs text-destructive">{recipientError}</p>}
                     <motion.button
                       disabled={!!pending || !plan.snapshot || !!recipientError}
                       onClick={() => setApproveOpen(true)}

@@ -2,7 +2,6 @@ export type Settings = {
   proactive?: ProactiveSettings
   shippingLocation?: ShippingLocation
   proactiveRevision?: number
-  retailerRecipients?: RetailerRecipient[]
   paypalEmail?: string
   orgName: string
   taxId: string
