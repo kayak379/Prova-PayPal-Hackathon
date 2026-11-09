@@ -80,18 +80,29 @@ function ProofValue({ label, value }: { label: string; value: string }) {
   return <div className="border-b border-border py-3 last:border-0"><div className="flex items-center justify-between gap-3"><dt className="text-xs text-muted-foreground">{label}</dt><button aria-label={`Copy ${label.toLowerCase()}`} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" onClick={async () => { try { await navigator.clipboard.writeText(value); setCopied(true) } catch { setCopied(false) } }}>{copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}</button></div><dd className="mt-1 break-all font-mono text-xs leading-relaxed">{value}</dd></div>
 }
 
-function EventDetail({ record, valid }: { record: EvidenceView['records'][number]; valid: boolean }) {
-  const [tab, setTab] = useState('Overview')
+function EventDetail({ record, valid, onClose }: { record: EvidenceView['records'][number]; valid: boolean; onClose: () => void }) {
   const { event, checkpoint } = record
-  const status = !valid ? 'Verification failed' : checkpoint ? 'Signed checkpoint' : record.coveredBySequence ? `Covered by checkpoint #${record.coveredBySequence}` : 'Unsigned record'
+  const signed = valid && !!(checkpoint || record.coveredBySequence)
+  const description = event.type === 'history.baseline'
+    ? 'Existing campaign data was recorded here. Earlier activity was not cryptographically witnessed.'
+    : event.type === 'signing.activated' ? 'A signature was added to protect this campaign’s recorded history.'
+      : event.type === 'campaign.created' ? 'This campaign was created and added to the activity history.'
+        : record.changedFields.length ? 'The following campaign data was updated.' : 'This action was recorded. No campaign data changed.'
   return <>
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>Event #{event.sequence} · {new Date(event.recordedAt).toLocaleString()}</span><span className={cn('rounded-full bg-muted px-2.5 py-1', !valid && 'text-destructive')}>{status}</span></div>
-    <div role="tablist" aria-label="Event details" className="mb-5 flex gap-1 rounded-full bg-muted p-1">{['Overview', 'Recorded data', 'Proof'].map(item => <button key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={cn('flex-1 rounded-full px-2 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring', tab === item ? 'bg-card shadow-sm' : 'text-muted-foreground')}>{item}</button>)}</div>
-    <div role="tabpanel">
-      {tab === 'Overview' ? <><p className="text-sm leading-relaxed">{event.type === 'history.baseline' ? 'Existing campaign data was recorded here. Earlier activity was not cryptographically witnessed.' : record.changedFields.length ? `Updated ${record.changedFields.map(field => FIELDS[field] ?? field).join(', ').toLowerCase()}.` : 'The campaign snapshot is unchanged. This event records an action or a verification checkpoint.'}</p><dl className="mt-5 space-y-4 text-sm"><div><dt className="text-xs text-muted-foreground">Recorded by</dt><dd className="mt-1">{SOURCES[event.source] ?? event.source}</dd></div><div><dt className="text-xs text-muted-foreground">Event type</dt><dd className="mt-1 break-all">{event.type}</dd></div></dl>{event.details !== null && <details className="mt-5 border-t border-border pt-4"><summary className="cursor-pointer text-sm text-muted-foreground">Supporting evidence</summary><JsonValue value={event.details} /></details>}</>
-        : tab === 'Recorded data' ? <><p className="text-xs leading-relaxed text-muted-foreground">The campaign snapshot at this event. Sensitive tokens and attachment contents are represented by hashes.</p><RecordedFields record={record} /></>
-          : <><p className="mb-2 text-xs text-muted-foreground">Use these references to independently verify the exported evidence.</p><dl>{Object.entries({ 'Event hash': record.hash, 'Previous hash': event.previousHash ?? 'First event', 'Campaign state hash': event.stateHash, 'Event ID': event.eventId, ...(checkpoint ? { 'Signing key fingerprint': checkpoint.keyId, Signature: checkpoint.signature } : {}) }).map(([label, value]) => <ProofValue key={label} label={label} value={value} />)}</dl></>}
+    <div className="mb-4 flex items-center gap-2 text-xs">
+      {signed ? <ShieldCheck className="size-4 text-brand" /> : <FileText className="size-4 text-muted-foreground" />}
+      <span className={cn('text-muted-foreground', !valid && 'text-destructive')}>{!valid ? 'Could not verify' : signed ? 'Verified' : 'Not signed'}</span>
     </div>
+    <p className="text-sm leading-relaxed">{description}</p>
+    {record.changedFields.length > 0 && !['history.baseline', 'campaign.created'].includes(event.type) && <div className="mt-3 flex flex-wrap gap-1.5">{record.changedFields.map(field => <span key={field} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{FIELDS[field] ?? field}</span>)}</div>}
+    <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{SOURCES[event.source] ?? event.source}<span className="mx-1.5">·</span>{new Date(event.recordedAt).toLocaleString()}</p>
+    <details className="mt-6 border-t border-border pt-4">
+      <summary className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">Technical details</summary>
+      <dl className="mt-3">{Object.entries({ 'Event type': event.type, 'Event hash': record.hash, 'Previous hash': event.previousHash ?? 'First event', 'Campaign state hash': event.stateHash, 'Event ID': event.eventId, ...(checkpoint ? { 'Signing key fingerprint': checkpoint.keyId, Signature: checkpoint.signature } : {}) }).map(([label, value]) => <ProofValue key={label} label={label} value={value} />)}</dl>
+      <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Recorded campaign data</summary><RecordedFields record={record} /></details>
+      {event.details !== null && <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Supporting evidence</summary><JsonValue value={event.details} /></details>}
+    </details>
+    <button onClick={onClose} className="mt-6 h-10 w-full rounded-full bg-muted text-sm font-medium transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Done</button>
   </>
 }
 
@@ -113,6 +124,6 @@ export function EvidenceRecords({ view }: { view: EvidenceView }) {
       {!view.records.length && <li className="px-5 py-8 text-center text-sm text-muted-foreground">Campaign events will appear here as activity is recorded.</li>}
     </ol>
     {view.records.length > 5 && <button onClick={() => setExpanded(value => !value)} className="mt-3 w-full rounded-lg py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{expanded ? 'Show fewer events' : `Show ${view.records.length - 5} more events`}</button>}
-    {selected && <EvidenceDialog title={EVENTS[selected.event.type] ?? selected.event.type} onClose={() => setSelected(null)}><EventDetail record={selected} valid={view.verification.valid} /></EvidenceDialog>}
+    {selected && <EvidenceDialog title={EVENTS[selected.event.type] ?? selected.event.type} onClose={() => setSelected(null)}><EventDetail record={selected} valid={view.verification.valid} onClose={() => setSelected(null)} /></EvidenceDialog>}
   </>
 }
