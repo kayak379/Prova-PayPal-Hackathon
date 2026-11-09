@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Check, Wifi } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-const entranceTime = (seconds: number) => seconds / 1.1
+const entranceTime = (seconds: number) => seconds / (1.1 * 1.07)
 
 export function PaymentTap({ active, complete }: { active: boolean; complete: boolean }) {
   const reduceMotion = useReducedMotion()
