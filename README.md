@@ -142,7 +142,7 @@ The [discovery agent](lib/server/discovery.ts) runs a server-directed workflow b
 3. **Allocate in code.** The [budget allocator](lib/server/budget-allocation.ts) scales quantities and fills spare capacity with whole units of selected products while respecting the ceiling in integer cents, including estimated 5% shipping and 8% tax. New live proposals require at least four distinct products. The server signs the price snapshot with the budget and catalog records for checkout and expires it after 24 hours.
 4. **Revise selectively.** On revision, the server verifies the prior snapshot and applies explicit add, update or remove operations. Unrelated products retain their quantities and the resulting proposal must still fit the budget.
 
-## PayPal Developer Platform
+# PayPal Developer Platform
 I had a lot of fun using the platform. I'd never explored PayPal's sandbox or developer features before (or fintech platforms in general), and I was impressed by how powerful they are.
 
 Prova uses the PayPal Web SDK v6 for payer interaction, the PayPal Agent Toolkit for campaign finance operations, and direct REST calls for Vault, Orders v2 checkout and the Payouts API. All three run against PayPal Sandbox; retailer fulfillment is simulated.
