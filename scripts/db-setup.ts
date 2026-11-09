@@ -5,6 +5,7 @@ import { seed } from '../db/seed'
 import { bootstrapWallet } from '../db/bootstrap-wallet'
 import { bootstrapRetailers } from '../db/bootstrap-retailers'
 import { sandboxRetailers } from '../db/sandbox-retailers'
+import { baselineEvidence } from '../lib/server/evidence'
 async function main() {
   await transaction(async client => {
     await client.query("SELECT pg_advisory_xact_lock(70261105)")
@@ -16,6 +17,7 @@ async function main() {
       await client.query('INSERT INTO schema_migrations(name) VALUES($1)', [name])
       console.log('Applied migration:', name)
     }
+    await baselineEvidence(client)
     await seed(client)
     await bootstrapRetailers(client, sandboxRetailers)
     await bootstrapWallet(client, process.env.PAYPAL_DEFAULT_VAULT_WALLET, process.env.PAYPAL_CLIENT_SECRET)

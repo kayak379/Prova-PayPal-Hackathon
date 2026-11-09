@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       })
       await client.query('UPDATE payment_attempts SET completed=true WHERE campaign_id=$1', [campaign.id])
       return captured
-    }, true)
+    }, true, { type: 'checkout.capture.verified', source: 'server' })
     // The capture and payout intent are already committed. A payout outage must
     // never roll back a successful buyer payment or ask the buyer to pay again.
     try {

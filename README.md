@@ -111,6 +111,12 @@ The [Render Blueprint](render.yaml) provisions the Node web service, persistent 
 
 One team email and password are configured through `DEMO_EMAIL` and `DEMO_PASSWORD`. Sign-in issues a signed HttpOnly session cookie valid for 24 hours. The Next.js proxy checks sessions and the origin of browser mutations. API rate limits are shared per server process: 120 requests per minute overall, 10 login attempts, and 10 discovery/finance-chat requests combined; excess requests receive `429` with `Retry-After`. These counters reset on restart and are independent across instances. The app has one shared identity, without individual accounts or organization isolation. [Proxy](proxy.ts) · [Sessions](lib/server/session.ts) · [Rate limits](lib/server/rate-limit.ts)
 
+## Cryptographic campaign evidence
+
+Campaign changes are committed to an append-only SHA-256 evidence chain in PostgreSQL, separately from the readable audit log. The **Audit log** tab includes **Verify evidence** and **Export evidence** controls. Verification checks the complete chain against its saved head and the current campaign state. Existing campaigns begin with an explicitly labeled migration baseline; earlier activity is not presented as cryptographically witnessed.
+
+Checkout and finance approval requests are committed before provider calls. Server saves record proposals, disaster provenance, verified captures, refunds, funding, payouts, and webhook references in the same transaction as their campaign updates. The shared team login does not identify individual operators. Optional dedicated Ed25519 keys sign checkpoints for independent verification; without a key, the UI explicitly reports an unsigned chain. Retain exports and trusted public keys separately to detect history replacement or rollback. [Evidence format, setup and offline verification](docs/evidence-chain.md)
+
 ## Custom TypeScript agent orchestration
 
 Prova implements its agent orchestration in TypeScript through Next.js API routes and a persistent background worker. The worker interprets eligible disaster reports with a structured model call, then invokes the shared discovery pipeline. Discovery uses a pipeline defined in code. The server alternates structured model calls with catalog search, validates the returned product references, and calculates quantities. Finance uses a bounded tool loop. The model chooses a campaign function, the server runs it, and the result goes back to the model for its next decision. Checkout and financial writes stay in server services that run after user approval.

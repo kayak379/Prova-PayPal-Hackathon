@@ -84,7 +84,7 @@ In the Render web service Shell, run:
 pnpm db:reset --confirm-reset
 ~~~
 
-This explicitly deletes **all workspace campaigns, settings, payment recovery records, and saved wallet references** and restores the samples. It does not cancel, refund, or delete anything at PayPal. Do not run it while a payment or finance operation is pending. Regular deployments never reset data.
+This explicitly deletes **all workspace campaigns, evidence history, settings, payment recovery records, and saved wallet references** and restores the samples. Export evidence checkpoints first; resetting evidence requires table-owner privileges. It does not cancel, refund, or delete anything at PayPal. Do not run it while a payment or finance operation is pending. Regular deployments never reset data.
 
 ## Troubleshooting
 

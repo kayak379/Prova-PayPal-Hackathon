@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       const reply = await financeChat(campaign, body.text, prior, client)
       applyFinance(campaign, reply.patch)
       return reply
-    })
+    }, false, { type: 'finance.assistant.result', source: 'server' })
     return Response.json(result)
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 400 })

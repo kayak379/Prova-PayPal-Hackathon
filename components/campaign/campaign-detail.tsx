@@ -13,6 +13,7 @@ import { PurchasesGraphic } from './purchases-graphic'
 import { OrdersList } from './orders-list'
 import { FinancePanel } from './finance-panel'
 import { AuditLog } from './audit-log'
+import { EvidencePanel } from './evidence-panel'
 import { DisasterContext } from './disaster-context'
 import { campaignSpent, usd } from '@/lib/format'
 import { useStore } from '@/lib/store'
@@ -214,7 +215,10 @@ export function CampaignDetail({ id }: { id: string }) {
           ) : tab === 'Finance' ? (
             <FinancePanel campaign={campaign} mode="finance" />
           ) : (
-            <AuditLog entries={campaign.audit} />
+            <>
+              <EvidencePanel campaignId={campaign.id} version={campaign.version} />
+              <AuditLog entries={campaign.audit} />
+            </>
           )}
         </motion.div>
       </div>

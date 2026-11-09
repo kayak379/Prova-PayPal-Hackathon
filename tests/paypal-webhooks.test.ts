@@ -37,6 +37,7 @@ test('verified PayPal webhook inbox and reconciliation', async t => {
   process.env.SESSION_SECRET = 'test-session-secret-with-thirty-two-characters'
   await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/003_paypal_webhooks.sql', 'utf8'))
+  await db.exec(await readFile('db/migrations/007_campaign_evidence.sql', 'utf8'))
 
   // PGlite has one connection. Emulate pool checkout so concurrent requests use
   // independent transactions, just as PostgreSQL pool clients do in production.
@@ -98,6 +99,7 @@ test('verified PayPal webhook inbox and reconciliation', async t => {
   const readCampaign = async () => (await db.query<{ data: Campaign }>("SELECT data FROM campaigns WHERE id='c1'")).rows[0].data
   const inbox = async (id: string) => (await db.query<any>('SELECT * FROM paypal_webhook_events WHERE id=$1', [id])).rows[0]
   async function reset(options: { pending?: boolean; invoice?: boolean; deleted?: boolean } = {}) {
+    await db.exec('ALTER TABLE campaign_evidence DISABLE TRIGGER campaign_evidence_immutable; DELETE FROM campaign_evidence; ALTER TABLE campaign_evidence ENABLE TRIGGER campaign_evidence_immutable;')
     await db.exec('DELETE FROM paypal_webhook_events; DELETE FROM payment_attempts; DELETE FROM campaigns;')
     calls.length = 0; signature = 'SUCCESS'; failPath = ''; failWrites = false
     capture = { id: 'CAPTURE1', status: 'COMPLETED', amount: usd('10.00'), supplementary_data: { related_ids: { order_id: 'ORDER1' } } }

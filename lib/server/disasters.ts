@@ -6,6 +6,7 @@ import { database, transaction } from './db'
 import { discover } from './discovery'
 import { interpretDisaster } from './disaster-agent'
 import { message } from './common'
+import { recordEvidence } from './evidence'
 
 export function validDisasterToken(header: string | null) {
   const secret = process.env.DISASTER_WEBHOOK_SECRET
@@ -149,6 +150,7 @@ export async function publishDisaster(job: DisasterJob, interpretation: { title:
       audit: [{ id: crypto.randomUUID(), at: Date.now(), actor: 'agent', message: `Prepared from ${job.event.source} event ${job.event.eventId}. ${job.snapshot.proactive.people} people / ${job.snapshot.proactive.days} days are planning assumptions. Human approval required before payment.` }],
     }
     await client.query('INSERT INTO campaigns(id,data) VALUES($1,$2)', [campaign.id, JSON.stringify(campaign)])
+    await recordEvidence(client, campaign.id, { type: 'campaign.created', source: 'disaster-worker', details: { eventId: job.event.eventId, source: job.event.source, approvalRequired: true } })
     await client.query("UPDATE disaster_events SET status='ready',campaign_id=$2,progress=$3,error=NULL,claim_token=NULL,lease_until=NULL,updated_at=now() WHERE id=$1", [job.id, campaign.id, plan.mock ? 'Demo proposal — review required' : 'Supply plan ready for review'])
     return true
   })

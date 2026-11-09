@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg'
 import type { Campaign, Plan } from '../lib/types'
+import { recordEvidence } from '../lib/server/evidence'
 export const settings = { orgName: 'Harbor Relief Alliance', taxId: '84-2918374', address: '1200 Relief Way, Houston, TX 77002', paypalEmail: '' }
 export const folders = [{ id: 'f_hurricane', name: 'Hurricane Season 2026' }, { id: 'f_wildfire', name: 'Wildfire Response' }, { id: 'f_archive', name: 'Archive' }]
 export async function seed(client: Pick<PoolClient, 'query'>) {
@@ -13,5 +14,8 @@ export async function seed(client: Pick<PoolClient, 'query'>) {
     { ...base, id: 'demo_proposal', name: 'Wildfire evacuation · Sample proposal', folderId: 'f_wildfire', budget: 15000, request: 'Equip a temporary evacuation shelter for 100 people.', proposal: plan },
     { ...base, id: 'demo_completed', name: 'Shelter supplies · Sample purchase', folderId: 'f_archive', budget: 5000, orders: [{ id: 'DEMO_ORDER_001', paypalTxn: 'DEMO_CAPTURE_001', supplier: 'Demo Supply Co. · synthetic purchase', items: plan.items, total: 1100, totalCents: 110000, approvedTotalCents: 110000, status: 'delivered', createdAt: now - 86400000, mock: true, sandbox: true }] },
   ]
-  for (const c of campaigns) await client.query('INSERT INTO campaigns(id,data) VALUES($1,$2) ON CONFLICT DO NOTHING', [c.id, JSON.stringify(c)])
+  for (const c of campaigns) {
+    const inserted = await client.query('INSERT INTO campaigns(id,data) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id', [c.id, JSON.stringify(c)])
+    if (inserted.rows.length) await recordEvidence(client, c.id, { type: 'campaign.created', source: 'demo', details: { synthetic: true } })
+  }
 }

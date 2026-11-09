@@ -12,6 +12,7 @@ import { parseDisaster, validDisasterToken, receiveDisaster, claimDisaster, proc
 import { POST as webhook, OPTIONS as webhookOptions } from '../app/api/disasters/webhook/route'
 import { POST as createCheckout } from '../app/api/checkout/create/route'
 import { sign, verify } from '../lib/server/common'
+import { campaignEvidence } from '../lib/server/evidence'
 
 const event: DisasterEvent = { source: 'Recorded disaster fixture', eventId: 'flood-1', type: 'flood', title: 'Flood near shelter', description: 'Flooding reported. Prepare practical supplies.',
   latitude: 38.846, longitude: -76.93, occurredAt: '2026-11-07T10:00:00Z', updatedAt: '2026-11-07T11:00:00Z', sourceUrl: 'https://example.org/event' }
@@ -48,6 +49,7 @@ test('persistent proactive workflow', async t => {
   await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/004_sandbox_payouts.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/006_proactive_disasters.sql', 'utf8'))
+  await db.exec(await readFile('db/migrations/007_campaign_evidence.sql', 'utf8'))
   const base: Settings = { orgName: 'Relief', address: '4600 Silver Hill Rd, Washington, DC 20233', taxId: 'test', proactive: { ...proactiveDefaults('relief'), enabled: true },
     shippingLocation: { address: '4600 Silver Hill Rd, Washington, DC 20233', matchedAddress: '4600 SILVER HILL RD', latitude: event.latitude, longitude: event.longitude } }
   await db.query("INSERT INTO workspace(id,settings,folders) VALUES('demo',$1,$2)", [JSON.stringify(base), JSON.stringify([{ id: 'relief', name: 'Relief' }])])
@@ -82,6 +84,9 @@ test('persistent proactive workflow', async t => {
       assert.equal(w.campaigns.length, 1)
       assert.equal(w.campaigns[0].orders.length, 0)
       assert.equal(w.campaigns[0].disaster?.event.eventId, event.eventId)
+      const evidence = await campaignEvidence(w.campaigns[0].id)
+      assert.equal(evidence.verification.valid, true)
+      assert.equal(evidence.bundle.records[0].event.source, 'disaster-worker')
       const older = { ...event, title: 'Old title', updatedAt: '2026-11-07T10:00:00Z' }
       await receiveDisaster(older)
       assert.equal((await row(job.id)).event.title, event.title)

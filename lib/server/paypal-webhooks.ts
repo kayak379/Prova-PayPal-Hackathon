@@ -153,7 +153,7 @@ export async function processWebhook(id: string) {
         id: crypto.randomUUID(), at: Date.now(), actor: 'paypal',
         message: `PayPal resource verified after ${row.event_type} · ${id}`,
       })
-      await saveCampaign(client, current)
+      await saveCampaign(client, current, { type: 'paypal.webhook.verified', source: 'paypal-webhook', details: { eventId: id, eventType: row.event_type } })
       await client.query(`
         UPDATE paypal_webhook_events SET processed_at=now(),attempts=attempts+1,last_error=NULL WHERE id=$1
       `, [id])

@@ -136,5 +136,5 @@ export async function processPayouts(campaignId: string, orderId?: string): Prom
       orders.push(order)
     }
     return orders
-  }, true)
+  }, true, { type: 'paypal.payouts.checked', source: 'server' })
 }

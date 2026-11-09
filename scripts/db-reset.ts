@@ -7,6 +7,11 @@ import { sandboxRetailers } from '../db/sandbox-retailers'
 async function main() {
   if (!process.argv.includes('--confirm-reset')) throw new Error('This deletes ALL shared workspace campaigns, payment recovery records, and wallet references. Run with --confirm-reset only for an intentional demo reset.')
   await transaction(async client => {
+    // Explicit administrative demo reset only. Normal application writes cannot
+    // modify evidence. Disabling the trigger requires table-owner privileges.
+    await client.query('ALTER TABLE campaign_evidence DISABLE TRIGGER campaign_evidence_immutable')
+    await client.query('DELETE FROM campaign_evidence')
+    await client.query('ALTER TABLE campaign_evidence ENABLE TRIGGER campaign_evidence_immutable')
     await client.query('DELETE FROM paypal_webhook_events')
     await client.query('DELETE FROM payment_attempts')
     await client.query('DELETE FROM campaigns')

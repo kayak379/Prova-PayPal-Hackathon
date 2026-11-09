@@ -7,6 +7,7 @@ import type { PlanItem } from '@/lib/types'
 import { financeTotals } from '@/lib/finance'
 import { totalsCents } from '@/lib/money'
 import { allocateRetailerPayouts } from '@/lib/retailer-payouts'
+import { recordEvidence } from '@/lib/server/evidence'
 
 export const runtime = 'nodejs'
 
@@ -43,6 +44,11 @@ export async function POST(request: Request) {
         ON CONFLICT(campaign_id) DO UPDATE
         SET attempt_id=EXCLUDED.attempt_id,data=NULL,completed=false,payout_plan=EXCLUDED.payout_plan
       `, [current.id, previous && !previous.completed ? previous.attempt_id : crypto.randomUUID(), JSON.stringify(payoutPlan)])
+      const attempt = (await client.query('SELECT attempt_id FROM payment_attempts WHERE campaign_id=$1', [current.id])).rows[0]
+      await recordEvidence(client, current.id, {
+        type: 'checkout.approved', source: 'shared-account', eventId: `checkout-approved:${attempt.attempt_id}`,
+        details: { attemptId: attempt.attempt_id, items: selected, totalCents: total, currency: 'USD', identity: 'Shared team account', notice: 'Checkout requested; payer approval and capture may still be pending.' },
+      })
     })
 
     const result = await withCampaign(body.campaignId, async (current, client) => {
@@ -77,7 +83,7 @@ export async function POST(request: Request) {
       `, [current.id, attemptId, JSON.stringify(checkout)])
       current.proposal = checkout.plan
       return checkout
-    })
+    }, false, { type: 'checkout.created', source: 'server' })
     return Response.json(result)
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 400 })

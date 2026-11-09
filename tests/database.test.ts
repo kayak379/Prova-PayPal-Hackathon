@@ -16,6 +16,7 @@ import { appOrigin } from '../lib/server/origin'
 import { POST as login } from '../app/api/auth/login/route'
 import { POST as logout } from '../app/api/auth/logout/route'
 import { sign } from '../lib/server/common'
+import { campaignEvidence } from '../lib/server/evidence'
 import type { Pool } from 'pg'
 
 test('PostgreSQL workspace integration', async t => {
@@ -30,6 +31,7 @@ test('PostgreSQL workspace integration', async t => {
   await db.exec(await readFile('db/migrations/001_workspace.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/002_wallet_bootstrap.sql', 'utf8'))
   await db.exec(await readFile('db/migrations/004_sandbox_payouts.sql', 'utf8'))
+  await db.exec(await readFile('db/migrations/007_campaign_evidence.sql', 'utf8'))
   try {
     await t.test('seed once and preserve edits on repeated deployment', async () => {
       await seed(client as any)
@@ -160,6 +162,14 @@ test('PostgreSQL workspace integration', async t => {
       await assert.rejects(withCampaign(c.id, async () => {}), /Campaign not found/)
       await withCampaign(c.id, async archived => { assert.equal(archived.orders.length, 1); assert.ok(archived.deletedAt) }, true)
       assert.equal((await db.query('SELECT * FROM payment_attempts WHERE campaign_id=$1', [c.id])).rows.length, 1)
+    })
+    await t.test('campaign, capture and archived recovery evidence remains verifiable', async () => {
+      for (const { id } of (await db.query<{ id: string }>('SELECT id FROM campaigns')).rows) {
+        const result = await campaignEvidence(id)
+        assert.equal(result.verification.valid, true, result.verification.error)
+      }
+      const events = (await db.query<{ event: { type: string } }>("SELECT event FROM campaign_evidence WHERE event->>'type'='checkout.approved'")).rows
+      assert.ok(events.length > 0)
     })
     await t.test('login credentials, session cookies and logout', async () => {
       process.env.DEMO_EMAIL = 'team@example.com'; process.env.DEMO_PASSWORD = 'a-test-password'

@@ -6,6 +6,8 @@ import { geocodeAddress } from './geocoding'
 import { proactiveDefaults } from '../proactive'
 import { formatAddress } from '../address'
 import type { ProactiveSettings, Settings } from '../types'
+import type { EvidenceContext } from '../evidence'
+import { assertEvidence, recordEvidence } from './evidence'
 
 export class Conflict extends Error {}
 
@@ -25,16 +27,18 @@ export async function workspace(): Promise<Workspace> {
 
 export async function campaign(client: PoolClient, id: string, includeDeleted = false): Promise<Campaign> {
   const result = await client.query(`
-    SELECT data, version FROM campaigns
+    SELECT data, version, evidence_sequence, evidence_hash FROM campaigns
     WHERE id=$1 AND ($2::boolean OR NOT (data ? 'deletedAt'))
     FOR UPDATE
   `, [id, includeDeleted])
   if (!result.rows[0]) throw new Error('Campaign not found.')
+  await assertEvidence(client, result.rows[0])
   return { ...result.rows[0].data, version: result.rows[0].version }
 }
 
-export async function saveCampaign(client: PoolClient, campaign: Campaign) {
+export async function saveCampaign(client: PoolClient, campaign: Campaign, evidence: EvidenceContext = { type: 'campaign.updated', source: 'server' }) {
   const { version, ...data } = campaign
+  await recordEvidence(client, campaign.id, evidence, campaign)
   await client.query('UPDATE campaigns SET data=$2, version=version+1 WHERE id=$1', [
     campaign.id,
     JSON.stringify(data),
@@ -45,11 +49,12 @@ export async function withCampaign<T>(
   id: string,
   work: (campaign: Campaign, client: PoolClient) => Promise<T>,
   includeDeleted = false,
+  evidence?: EvidenceContext,
 ) {
   return transaction(async client => {
     const current = await campaign(client, id, includeDeleted)
     const result = await work(current, client)
-    await saveCampaign(client, current)
+    await saveCampaign(client, current, evidence)
     return result
   })
 }
@@ -131,6 +136,7 @@ export async function mutate(input: any) {
         audit: [{ id: crypto.randomUUID(), at: Date.now(), actor: 'user', message: 'Campaign created' }],
       }
       await client.query('INSERT INTO campaigns(id,data) VALUES($1,$2)', [created.id, JSON.stringify(created)])
+      await recordEvidence(client, created.id, { type: 'campaign.created', source: 'shared-account' })
       entity = created
     } else {
       const current = await campaign(client, requiredText(input.id), input.kind === 'delete')
@@ -178,7 +184,7 @@ export async function mutate(input: any) {
         default:
           throw new Error('Unknown workspace operation.')
       }
-      await saveCampaign(client, current)
+      await saveCampaign(client, current, { type: `workspace.${input.kind}`, source: 'shared-account', details: { identity: 'Shared team account; no individual identity asserted', ...(input.kind === 'proposal' ? { provenance: 'Browser-submitted proposal; checkout separately verifies signed prices' } : {}) } })
     }
     return entity
   })

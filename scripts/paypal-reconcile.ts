@@ -30,7 +30,7 @@ async function main() {
         const result = await reconcile(campaign, client)
         applyFinance(campaign, result)
         return result
-      }, true)
+      }, true, { type: 'paypal.reconciled', source: 'server' })
       const payoutOrders = await processPayouts(id)
       for (const order of payoutOrders) {
         if (order.payouts?.error || ['FAILED', 'PARTIAL', 'NEEDS_REVIEW'].includes(order.payouts?.status || '')) {

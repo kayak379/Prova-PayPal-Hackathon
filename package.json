@@ -9,6 +9,7 @@
     "start": "next start",
     "db:setup": "tsx scripts/db-setup.ts",
     "db:reset": "tsx scripts/db-reset.ts",
+    "evidence:verify": "tsx scripts/evidence-verify.ts",
     "paypal:reconcile": "tsx scripts/paypal-reconcile.ts",
     "disasters:worker": "tsx scripts/disaster-worker.ts",
     "typecheck": "tsc --noEmit",

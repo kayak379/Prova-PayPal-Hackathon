@@ -10,6 +10,7 @@ import { seed } from '../db/seed'
 import { mutate, workspace, withCampaign } from '../lib/server/workspace'
 import { recoverCheckout } from '../lib/server/checkout-persistence'
 import { processPayouts } from '../lib/server/payouts'
+import { campaignEvidence } from '../lib/server/evidence'
 import { sign } from '../lib/server/common'
 import { POST as createCheckout } from '../app/api/checkout/create/route'
 import { POST as captureCheckout } from '../app/api/checkout/capture/route'
@@ -48,7 +49,7 @@ test('automatic sandbox assignment is stable and reusable across arbitrary retai
 
 test('sandbox payout checkout, persistence and recovery', async t => {
   const db = new PGlite()
-  for (const name of ['001_workspace.sql', '002_wallet_bootstrap.sql', '004_sandbox_payouts.sql']) await db.exec(await readFile('db/migrations/' + name, 'utf8'))
+  for (const name of ['001_workspace.sql', '002_wallet_bootstrap.sql', '004_sandbox_payouts.sql', '007_campaign_evidence.sql']) await db.exec(await readFile('db/migrations/' + name, 'utf8'))
   process.env.DATABASE_URL = 'postgres://test'
   process.env.PAYPAL_CLIENT_ID = 'test-client'
   process.env.PAYPAL_CLIENT_SECRET = 'test-secret'
@@ -295,6 +296,12 @@ test('sandbox payout checkout, persistence and recovery', async t => {
         }
         assert.equal((await processPayouts(input.campaignId))[0].payouts?.status, 'NEEDS_REVIEW')
         assert.equal(payoutPosts, before)
+      }
+    })
+    await t.test('captured purchases and recovered retailer payouts retain valid evidence', async () => {
+      for (const { id } of (await query('SELECT id FROM campaigns')).rows as { id: string }[]) {
+        const result = await campaignEvidence(id)
+        assert.equal(result.verification.valid, true, result.verification.error)
       }
     })
     await t.test('payout status refresh cannot create an intent for a sample or unknown purchase', async () => {
