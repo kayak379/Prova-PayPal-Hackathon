@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Check, ChevronRight, Copy, FileText, ShieldCheck, User, Sparkles } from 'lucide-react'
 import type { EvidenceRecord, EvidenceView } from '@/lib/evidence'
 import { Modal } from '../modal'
@@ -81,6 +82,9 @@ function ProofValue({ label, value }: { label: string; value: string }) {
 }
 
 function EventDetail({ record, valid, onClose }: { record: EvidenceView['records'][number]; valid: boolean; onClose: () => void }) {
+  const [technicalOpen, setTechnicalOpen] = useState(false)
+  const technicalId = useId()
+  const reduced = useReducedMotion()
   const { event, checkpoint } = record
   const signed = valid && !!(checkpoint || record.coveredBySequence)
   const description = event.type === 'history.baseline'
@@ -96,12 +100,16 @@ function EventDetail({ record, valid, onClose }: { record: EvidenceView['records
     <p className="text-sm leading-relaxed">{description}</p>
     {record.changedFields.length > 0 && !['history.baseline', 'campaign.created'].includes(event.type) && <div className="mt-3 flex flex-wrap gap-1.5">{record.changedFields.map(field => <span key={field} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{FIELDS[field] ?? field}</span>)}</div>}
     <p className="mt-4 text-xs leading-relaxed text-muted-foreground">{SOURCES[event.source] ?? event.source}<span className="mx-1.5">·</span>{new Date(event.recordedAt).toLocaleString()}</p>
-    <details className="mt-6 border-t border-border pt-4">
-      <summary className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-foreground">Technical details</summary>
+    <div className="mt-6 border-t border-border pt-4">
+      <button aria-expanded={technicalOpen} aria-controls={technicalId} onClick={() => setTechnicalOpen(value => !value)} className="inline-flex items-center gap-1.5 rounded-md py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <motion.span animate={{ rotate: technicalOpen ? 90 : 0 }} transition={{ duration: reduced ? 0 : 0.2 }}><ChevronRight className="size-3" /></motion.span>Technical details
+      </button>
+      <AnimatePresence initial={false}>{technicalOpen && <motion.div id={technicalId} key="technical" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: reduced ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden">
       <dl className="mt-3">{Object.entries({ 'Event type': event.type, 'Event hash': record.hash, 'Previous hash': event.previousHash ?? 'First event', 'Campaign state hash': event.stateHash, 'Event ID': event.eventId, ...(checkpoint ? { 'Signing key fingerprint': checkpoint.keyId, Signature: checkpoint.signature } : {}) }).map(([label, value]) => <ProofValue key={label} label={label} value={value} />)}</dl>
       <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Recorded campaign data</summary><RecordedFields record={record} /></details>
       {event.details !== null && <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Supporting evidence</summary><JsonValue value={event.details} /></details>}
-    </details>
+      </motion.div>}</AnimatePresence>
+    </div>
     <button onClick={onClose} className="mt-6 h-10 w-full rounded-full bg-muted text-sm font-medium transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Done</button>
   </>
 }
