@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type PointerEvent } from 'react'
 import type { ShippingLocation } from '@/lib/types'
 
 // Simplified coastline silhouettes, in longitude / latitude coordinates.
@@ -30,7 +30,15 @@ const land = Array.from({ length: 59 }, (_, row) => -87 + row * 3).flatMap(lat =
 
 export function LocationGlobe({ location }: { location?: ShippingLocation }) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const pointer = useRef({ x: 0, y: 0 })
+  const interaction = useRef({ hovered: false, longitude: 0, latitude: 0, drag: null as { id: number; x: number; y: number } | null })
+
+  function endDrag(event: PointerEvent<HTMLElement>) {
+    if (interaction.current.drag?.id !== event.pointerId) return
+    interaction.current.drag = null
+    const bounds = event.currentTarget.getBoundingClientRect()
+    interaction.current.hovered = event.pointerType !== 'touch' && event.clientX >= bounds.left && event.clientX <= bounds.right && event.clientY >= bounds.top && event.clientY <= bounds.bottom
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
   useEffect(() => {
     const element = canvas.current
     const ctx = element?.getContext('2d')
@@ -42,19 +50,19 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
     let frame = 0
     let elapsed = 0
     let previous = 0
-    let followX = 0
-    let followY = 0
+    let spin = 0
+    let speed = 1
     const rad = Math.PI / 180
     const baseTilt = (location?.latitude ?? 25) * rad
     function draw(time: number) {
-      if (previous && !document.hidden && !reduced.matches) elapsed += Math.min(time - previous, 50)
+      const delta = previous && !document.hidden ? Math.min(time - previous, 50) : 0
+      if (!reduced.matches) elapsed += delta
       previous = time
-      const smoothing = reduced.matches ? 1 : 1 - Math.exp(-Math.min(time - previousFrame, 50) / 140)
-      previousFrame = time
-      followX += (pointer.current.x - followX) * smoothing
-      followY += (pointer.current.y - followY) * smoothing
-      const rotation = -(location?.longitude ?? -95) * rad + elapsed * 1.05 / 18000 + followX * 0.65
-      const tilt = baseTilt - followY * 0.4
+      if (interaction.current.hovered || interaction.current.drag || reduced.matches) speed = 0
+      else speed += (1 - speed) * (1 - Math.exp(-delta / 450))
+      spin += delta * speed * 1.05 / 18000
+      const rotation = -(location?.longitude ?? -95) * rad + spin + interaction.current.longitude
+      const tilt = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, baseTilt + interaction.current.latitude))
       const roll = -23.5 * rad
       function project(lat: number, lon: number) {
         const a = lat * rad, b = lon * rad + rotation
@@ -102,18 +110,31 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
       }
       frame = requestAnimationFrame(draw)
     }
-    let previousFrame = performance.now()
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
   }, [location?.latitude, location?.longitude])
 
-  return <figure className="group flex shrink-0 flex-col items-center" title={location?.matchedAddress ?? 'Set your default address in account settings'}
-    onPointerMove={event => {
-      if (event.pointerType === 'touch') return
-      const bounds = event.currentTarget.getBoundingClientRect()
-      pointer.current = { x: Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1)), y: Math.max(-1, Math.min(1, (event.clientY - bounds.top) / bounds.height * 2 - 1)) }
+  return <figure className="group flex shrink-0 touch-none select-none flex-col items-center cursor-grab active:cursor-grabbing" title={location ? `${location.matchedAddress} · Drag to rotate` : 'Drag to rotate · Set your default address in account settings'}
+    onPointerEnter={event => { if (event.pointerType !== 'touch') interaction.current.hovered = true }}
+    onPointerDown={event => {
+      if (event.button !== 0 || interaction.current.drag) return
+      event.currentTarget.setPointerCapture(event.pointerId)
+      interaction.current.drag = { id: event.pointerId, x: event.clientX, y: event.clientY }
     }}
-    onPointerLeave={() => { pointer.current = { x: 0, y: 0 } }}>
+    onPointerMove={event => {
+      const drag = interaction.current.drag
+      if (!drag || drag.id !== event.pointerId) return
+      const roll = -23.5 * Math.PI / 180
+      const dx = event.clientX - drag.x, dy = event.clientY - drag.y
+      const sensitivity = Math.PI / event.currentTarget.getBoundingClientRect().width
+      interaction.current.longitude += (dx * Math.cos(roll) - dy * Math.sin(roll)) * sensitivity
+      interaction.current.latitude = Math.max(-Math.PI, Math.min(Math.PI, interaction.current.latitude + (dx * Math.sin(roll) + dy * Math.cos(roll)) * sensitivity))
+      drag.x = event.clientX; drag.y = event.clientY
+    }}
+    onPointerUp={endDrag}
+    onPointerCancel={event => { endDrag(event); interaction.current.hovered = false }}
+    onLostPointerCapture={() => { interaction.current.drag = null }}
+    onPointerLeave={() => { interaction.current.hovered = false }}>
     <canvas ref={canvas} role="img" aria-label={location ? `Globe marking your default address: ${location.matchedAddress}` : 'Globe: no verified default address'} className="size-28 transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transform-none sm:size-32" />
   </figure>
 }
