@@ -74,14 +74,14 @@ export function ProactiveResponses() {
     </div>
     <ProactiveSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
-    <div className="mt-4 flex items-center justify-between gap-5 sm:gap-8">
-      <div className="min-w-0 max-w-lg flex-1">
+    <div className="mt-1 flex items-start justify-between gap-5 sm:gap-8">
+      <div className="min-w-0 max-w-lg flex-1 pt-2">
         <p className="text-sm leading-relaxed text-muted-foreground">{settings.proactive?.enabled ? 'Nearby disaster updates will appear here as Prova prepares supply plans for your review.' : 'Use the settings gear above to enable automatic responses to nearby disasters.'}</p>
         {settings.address && <p className="mt-2 truncate text-xs text-muted-foreground/75" title={settings.address}>{settings.address}</p>}
       </div>
       <LocationGlobe location={settings.shippingLocation?.address === settings.address ? settings.shippingLocation : undefined} />
     </div>
-    <div className="mt-4 space-y-3" aria-live="polite">
+    <div className={responses.length ? 'mt-3 space-y-3' : undefined} aria-live="polite">
       {responses.map(response => <article key={response.id} className="rounded-xl border border-border p-4">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div className="min-w-0 flex-1">
