@@ -34,7 +34,7 @@ export function AuditLog({ entries, embedded = false }: { entries: AuditEntry[];
               <span className="sr-only">{a.label}</span>
             </motion.span>
             <div className="min-w-0 flex-1 rounded-lg pt-1 transition-colors group-hover:bg-muted/40">
-              <p className="text-sm leading-relaxed">{e.message.replace(/\bsandbox\s*/gi, '').replace(/\s*·\s*fulfillment simulated/gi, '')}</p>
+              <p className="text-sm leading-relaxed">{e.message.replace(/\bsandbox\s*/gi, '').replace(/\s*·\s*fulfillment simulated/gi, '').replace(/^(Retailer payouts\s*·\s*[^·]+)\s*·\s*PENDING\b/i, '$1')}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {a.label} · {formatTime(e.at)}
               </p>
