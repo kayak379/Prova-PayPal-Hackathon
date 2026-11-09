@@ -16,6 +16,8 @@ export function ProactiveResponses() {
   const [retrying, setRetrying] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const ready = useRef(new Set<string>())
+  const seenEvents = useRef<Set<string> | null>(null)
+  const [eventSignal, setEventSignal] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -36,7 +38,13 @@ export function ProactiveResponses() {
           await refresh()
           newReady.forEach(r => ready.current.add(r.id))
         }
-        if (!cancelled) { setResponses(next); setError('') }
+        if (!cancelled) {
+          const eventIds = next.map(r => JSON.stringify([r.event.source, r.event.eventId]))
+          if (seenEvents.current && eventIds.some(id => !seenEvents.current!.has(id))) setEventSignal(value => value + 1)
+          if (!seenEvents.current) seenEvents.current = new Set()
+          eventIds.forEach(id => seenEvents.current!.add(id))
+          setResponses(next); setError('')
+        }
       } catch (e) { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load responses.') }
       finally {
         polling = false
@@ -79,7 +87,7 @@ export function ProactiveResponses() {
         <p className="text-sm leading-relaxed text-muted-foreground">{settings.proactive?.enabled ? 'Nearby disaster updates will appear here as Prova prepares supply plans for your review.' : 'Use the settings gear above to enable automatic responses to nearby disasters.'}</p>
         {settings.address && <p className="mt-2 truncate text-xs text-muted-foreground/75" title={settings.address}>{settings.address}</p>}
       </div>
-      <LocationGlobe location={settings.shippingLocation?.address === settings.address ? settings.shippingLocation : undefined} />
+      <LocationGlobe location={settings.shippingLocation?.address === settings.address ? settings.shippingLocation : undefined} eventSignal={eventSignal} />
     </div>
     <div className={responses.length ? 'mt-3 space-y-3' : undefined} aria-live="polite">
       {responses.map(response => <article key={response.id} className="rounded-xl border border-border p-4">

@@ -28,8 +28,12 @@ function onLand(lon: number, lat: number) {
 const land = Array.from({ length: 59 }, (_, row) => -87 + row * 3).flatMap(lat =>
   Array.from({ length: 120 }, (_, col) => -180 + col * 3).filter(lon => onLand(lon, lat)).map(lon => [lat, lon]))
 
-export function LocationGlobe({ location }: { location?: ShippingLocation }) {
+export function LocationGlobe({ location, eventSignal = 0 }: { location?: ShippingLocation; eventSignal?: number }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const alertUntil = useRef(0)
+  useEffect(() => {
+    if (eventSignal > 0) alertUntil.current = performance.now() + 1800
+  }, [eventSignal])
   const interaction = useRef({ hovered: false, longitude: 0, latitude: 0, velocityX: 0, velocityY: 0, drag: null as { id: number; x: number; y: number; time: number } | null })
 
   function endDrag(event: PointerEvent<HTMLElement>) {
@@ -73,7 +77,7 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
       state.latitude = Math.max(-Math.PI / 2 - baseTilt, Math.min(Math.PI / 2 - baseTilt, state.latitude))
       if (interaction.current.hovered || interaction.current.drag || reduced.matches) speed = 0
       else speed += (1 - speed) * (1 - Math.exp(-delta / 450))
-      spin += delta * speed * 1.05 / 18000
+      spin += delta * speed * 1.05 * 0.96 / 18000
       const rotation = -(location?.longitude ?? -95) * rad + spin + interaction.current.longitude
       const tilt = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, baseTilt + interaction.current.latitude))
       const roll = -23.5 * rad
@@ -112,11 +116,13 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
       if (location) {
         const p = project(location.latitude, location.longitude)
         if (p.z > 0) {
+          const alert = Math.max(0, Math.min(1, (alertUntil.current - time) / 400))
+          const tint = (normal: number[], red: number[]) => normal.map((value, i) => Math.round(value + (red[i] - value) * alert)).join(',')
           const pulse = reduced.matches ? 0 : (Math.sin(elapsed / 700) + 1) / 2
           ctx!.globalAlpha = Math.min(1, p.z * 5)
-          ctx!.strokeStyle = 'rgba(225,245,195,.5)'; ctx!.lineWidth = 1
+          ctx!.strokeStyle = `rgba(${tint([225,245,195], [255,110,110])},.5)`; ctx!.lineWidth = 1
           ctx!.beginPath(); ctx!.arc(p.x, p.y, 6 + pulse * 4, 0, Math.PI * 2); ctx!.stroke()
-          ctx!.fillStyle = '#ecf7ca'; ctx!.shadowColor = '#dcf4ad'; ctx!.shadowBlur = 9
+          ctx!.fillStyle = `rgb(${tint([236,247,202], [255,95,95])})`; ctx!.shadowColor = `rgb(${tint([220,244,173], [255,75,75])})`; ctx!.shadowBlur = 9
           ctx!.beginPath(); ctx!.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx!.fill()
           ctx!.shadowBlur = 0; ctx!.globalAlpha = 1
         }
