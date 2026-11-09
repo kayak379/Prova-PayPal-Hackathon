@@ -44,3 +44,14 @@ export type EvidenceBundle = {
   head: { sequence: number; hash: string | null }
   records: EvidenceRecord[]
 }
+
+export type EvidenceView = {
+  verification: EvidenceVerification
+  campaignVersion: number
+  checkedAt: string
+  latestRecord: EvidenceRecord | null
+  records: (EvidenceRecord & { changedFields: string[]; coveredBySequence: number | null })[]
+  page: number
+  pages: number
+  total: number
+}

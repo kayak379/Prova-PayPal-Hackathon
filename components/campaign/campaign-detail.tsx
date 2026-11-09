@@ -217,6 +217,7 @@ export function CampaignDetail({ id }: { id: string }) {
           ) : (
             <>
               <EvidencePanel campaignId={campaign.id} version={campaign.version} />
+              <h3 className="mb-3 font-medium">Activity notes</h3>
               <AuditLog entries={campaign.audit} />
             </>
           )}

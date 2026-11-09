@@ -2,6 +2,8 @@
 
 The campaign's **Audit log** tab contains **Verify evidence** and **Export evidence**. Verification reads the server's current state; the existing **Export campaign** button continues to export the browser's campaign view. Evidence exports contain the ordered evidence records and a saved head, including when verification fails, so an investigator can inspect the failure.
 
+Opening the audit tab loads and verifies evidence automatically. The coverage panel lists the fields actually present in the latest recorded campaign snapshot, with expandable exact values and nested data. Evidence events appear newest first, ten per page, with the changed fields, source, recording time, signature status, event details, hashes and captured campaign snapshot. Earlier unsigned records identify the later signed checkpoint that includes them. Imported history retains its baseline notice. Failed verification is displayed explicitly; a signature's presence alone is not presented as successful verification. Activity notes remain visible below the evidence events.
+
 ## Setup
 
 Run `pnpm db:setup` before starting the updated app and worker. Migration `007_campaign_evidence.sql` adds an append-only evidence table and a sequence/hash pointer to each campaign. Setup records one `history.baseline` event for each preexisting campaign, including archived campaigns, using the time of migration. It preserves the campaign's original timestamps and labels its earlier history as unwitnessed. Repeated setup does not recreate baselines. New sample campaigns are explicitly marked synthetic.

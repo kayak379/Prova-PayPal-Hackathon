@@ -147,6 +147,17 @@ test('campaign evidence persistence, verification, exports and approvals', async
       assert.equal(response.status, 200)
       assert.match(response.headers.get('cache-control')!, /no-store/)
       assert.equal((await response.json()).verification.valid, true)
+      const viewResponse = await GET(new Request(url + '?view=1'), context)
+      const view = await viewResponse.json()
+      assert.equal(viewResponse.status, 200)
+      assert.equal(view.total, signedBundle.records.length)
+      assert.equal(view.latestRecord.hash, signedBundle.head.hash)
+      assert.equal(view.records[0].event.sequence, signedBundle.head.sequence)
+      assert.deepEqual(view.records[0].changedFields, ['name'])
+      assert.equal(view.records.at(-1).coveredBySequence, signedBundle.head.sequence)
+      for (const invalid of ['0', '-1', '1.5', 'abc']) {
+        assert.equal((await GET(new Request(url + '?view=1&page=' + invalid), context)).status, 400)
+      }
       const exported = await GET(new Request(url + '?export=1'), context)
       assert.match(exported.headers.get('content-disposition')!, /attachment/)
       const bundle = await exported.json()
@@ -162,6 +173,26 @@ test('campaign evidence persistence, verification, exports and approvals', async
         assert.throws(() => execFileSync(process.execPath, ['--import', 'tsx', 'scripts/evidence-verify.ts', join(directory, 'evidence.json')], { stdio: 'pipe' }))
       } finally { await rm(directory, { recursive: true, force: true }) }
       assert.equal((await GET(new Request(url), { params: Promise.resolve({ id: 'absent' }) })).status, 404)
+    })
+    await t.test('audit view pages cover every event and compare fields across page boundaries', async () => {
+      for (let n = 0; n < 11; n++) await withCampaign(id, async c => {
+        if (n === 0) c.request = 'Recorded request'
+        else if (n === 1) delete c.request
+        else c.budget += 1
+      })
+      const url = `https://demo.example/api/campaigns/${id}/evidence?view=1`
+      const context = { params: Promise.resolve({ id }) }
+      const first = await (await GET(new Request(url), context)).json()
+      const second = await (await GET(new Request(url + '&page=2'), context)).json()
+      assert.equal(first.records.length, 10)
+      assert.equal(first.pages, 2)
+      assert.deepEqual([...first.records, ...second.records].map(r => r.event.sequence), Array.from({ length: first.total }, (_, i) => first.total - i))
+      assert.equal(second.latestRecord.hash, first.latestRecord.hash)
+      assert.deepEqual(first.records.at(-1).changedFields, ['request']) // Field removed.
+      assert.deepEqual(second.records[0].changedFields, ['request']) // Field added on prior page.
+      const clamped = await (await GET(new Request(url + '&page=999'), context)).json()
+      assert.equal(clamped.page, 2)
+      assert.deepEqual(clamped.records, second.records)
     })
     await t.test('finance approval survives provider failure, deduplicates retries, and rejects expired tokens', async () => {
       const token = sign({ campaignId: id, expires: Date.now() + 60000, operationId: 'op-1', kind: 'refund', orderId: 'missing', amountCents: 100 })
