@@ -30,6 +30,7 @@ const land = Array.from({ length: 59 }, (_, row) => -87 + row * 3).flatMap(lat =
 
 export function LocationGlobe({ location }: { location?: ShippingLocation }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const pointer = useRef({ x: 0, y: 0 })
   useEffect(() => {
     const element = canvas.current
     const ctx = element?.getContext('2d')
@@ -41,18 +42,26 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
     let frame = 0
     let elapsed = 0
     let previous = 0
+    let followX = 0
+    let followY = 0
     const rad = Math.PI / 180
-    const tilt = (location?.latitude ?? 25) * rad
+    const baseTilt = (location?.latitude ?? 25) * rad
     function draw(time: number) {
       if (previous && !document.hidden && !reduced.matches) elapsed += Math.min(time - previous, 50)
       previous = time
-      const rotation = -(location?.longitude ?? -95) * rad + elapsed / 18000
+      const smoothing = reduced.matches ? 1 : 1 - Math.exp(-Math.min(time - previousFrame, 50) / 140)
+      previousFrame = time
+      followX += (pointer.current.x - followX) * smoothing
+      followY += (pointer.current.y - followY) * smoothing
+      const rotation = -(location?.longitude ?? -95) * rad + elapsed * 1.05 / 18000 + followX * 0.65
+      const tilt = baseTilt - followY * 0.4
+      const roll = -23.5 * rad
       function project(lat: number, lon: number) {
         const a = lat * rad, b = lon * rad + rotation
         const x = Math.cos(a) * Math.sin(b)
         const y = Math.sin(a) * Math.cos(tilt) - Math.cos(a) * Math.cos(b) * Math.sin(tilt)
         const z = Math.sin(a) * Math.sin(tilt) + Math.cos(a) * Math.cos(b) * Math.cos(tilt)
-        return { x: 72 + x * 58, y: 69 - y * 58, z }
+        return { x: 72 + (x * Math.cos(roll) - y * Math.sin(roll)) * 58, y: 69 - (x * Math.sin(roll) + y * Math.cos(roll)) * 58, z }
       }
       ctx!.clearRect(0, 0, 144, 144)
       const shade = ctx!.createRadialGradient(50, 43, 5, 80, 80, 84)
@@ -93,12 +102,18 @@ export function LocationGlobe({ location }: { location?: ShippingLocation }) {
       }
       frame = requestAnimationFrame(draw)
     }
+    let previousFrame = performance.now()
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
   }, [location?.latitude, location?.longitude])
 
-  return <figure className="group flex shrink-0 flex-col items-center" title={location?.matchedAddress ?? 'Set your default address in account settings'}>
+  return <figure className="group flex shrink-0 flex-col items-center" title={location?.matchedAddress ?? 'Set your default address in account settings'}
+    onPointerMove={event => {
+      if (event.pointerType === 'touch') return
+      const bounds = event.currentTarget.getBoundingClientRect()
+      pointer.current = { x: Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1)), y: Math.max(-1, Math.min(1, (event.clientY - bounds.top) / bounds.height * 2 - 1)) }
+    }}
+    onPointerLeave={() => { pointer.current = { x: 0, y: 0 } }}>
     <canvas ref={canvas} role="img" aria-label={location ? `Globe marking your default address: ${location.matchedAddress}` : 'Globe: no verified default address'} className="size-28 transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transform-none sm:size-32" />
-    <figcaption className="flex items-center gap-1.5 text-[10px] tracking-wide text-muted-foreground"><span className={`size-1.5 rounded-full ${location ? 'bg-brand' : 'bg-muted-foreground'}`} />{location ? 'Default address' : 'Set default address'}</figcaption>
   </figure>
 }
