@@ -217,8 +217,10 @@ export function CampaignDetail({ id }: { id: string }) {
           ) : (
             <>
               <EvidencePanel campaignId={campaign.id} version={campaign.version} />
-              <h3 className="mb-3 font-medium">Activity notes</h3>
-              <AuditLog entries={campaign.audit} />
+              <details className="border-t border-border pt-5">
+                <summary className="cursor-pointer text-sm text-muted-foreground">Activity notes <span className="ml-1 text-xs">{campaign.audit.length}</span></summary>
+                <div className="mt-4"><AuditLog entries={campaign.audit} /></div>
+              </details>
             </>
           )}
         </motion.div>
