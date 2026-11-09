@@ -31,8 +31,12 @@ const land = Array.from({ length: 59 }, (_, row) => -87 + row * 3).flatMap(lat =
 export function LocationGlobe({ location, eventSignal = 0 }: { location?: ShippingLocation; eventSignal?: number }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const alertUntil = useRef(0)
+  const focusRequested = useRef(false)
   useEffect(() => {
-    if (eventSignal > 0) alertUntil.current = performance.now() + 1800
+    if (eventSignal > 0) {
+      focusRequested.current = true
+      alertUntil.current = 0
+    }
   }, [eventSignal])
   const interaction = useRef({ hovered: false, longitude: 0, latitude: 0, velocityX: 0, velocityY: 0, drag: null as { id: number; x: number; y: number; time: number } | null })
 
@@ -59,6 +63,7 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
     let previous = 0
     let spin = 0
     let speed = 1
+    let focus: { longitude: number; latitude: number; turn: number; progress: number } | null = null
     const rad = Math.PI / 180
     const baseTilt = (location?.latitude ?? 25) * rad
     function draw(time: number) {
@@ -66,7 +71,27 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
       if (!reduced.matches) elapsed += delta
       previous = time
       const state = interaction.current
-      if (!state.drag) {
+      // Let an active drag finish before turning toward the saved location.
+      if (state.drag && focus) { focus = null; focusRequested.current = true }
+      if (focusRequested.current && location && !state.drag && !document.hidden) {
+        const longitude = spin + state.longitude
+        focus = { longitude, latitude: state.latitude, turn: Math.atan2(Math.sin(-longitude), Math.cos(-longitude)), progress: 0 }
+        focusRequested.current = false
+      }
+      if (focus) {
+        speed = 0
+        state.velocityX = state.velocityY = 0
+        focus.progress = reduced.matches ? 1 : Math.min(1, focus.progress + delta / 1100)
+        const eased = focus.progress ** 2 * (3 - 2 * focus.progress)
+        state.longitude = focus.longitude + focus.turn * eased - spin
+        state.latitude = focus.latitude * (1 - eased)
+        if (focus.progress === 1) {
+          focus = null
+          alertUntil.current = time + 1800
+        }
+      }
+      const presentingEvent = focus !== null || time < alertUntil.current
+      if (!state.drag && !presentingEvent) {
         const decay = Math.exp(-delta / 260)
         const travel = reduced.matches ? 0 : 260 * (1 - decay)
         state.longitude += state.velocityX * travel
@@ -75,7 +100,7 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
         state.velocityY *= reduced.matches ? 0 : decay
       }
       state.latitude = Math.max(-Math.PI / 2 - baseTilt, Math.min(Math.PI / 2 - baseTilt, state.latitude))
-      if (interaction.current.hovered || interaction.current.drag || reduced.matches) speed = 0
+      if (presentingEvent || interaction.current.hovered || interaction.current.drag || reduced.matches) speed = 0
       else speed += (1 - speed) * (1 - Math.exp(-delta / 450))
       spin += delta * speed * 1.05 * 0.96 / 18000
       const rotation = -(location?.longitude ?? -95) * rad + spin + interaction.current.longitude
