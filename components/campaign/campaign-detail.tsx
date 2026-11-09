@@ -215,13 +215,9 @@ export function CampaignDetail({ id }: { id: string }) {
           ) : tab === 'Finance' ? (
             <FinancePanel campaign={campaign} mode="finance" />
           ) : (
-            <>
-              <EvidencePanel campaignId={campaign.id} version={campaign.version} />
-              <details className="border-t border-border pt-5">
-                <summary className="cursor-pointer text-sm text-muted-foreground">Activity notes <span className="ml-1 text-xs">{campaign.audit.length}</span></summary>
-                <div className="mt-4"><AuditLog entries={campaign.audit} /></div>
-              </details>
-            </>
+            <EvidencePanel campaignId={campaign.id} version={campaign.version}>
+              <AuditLog entries={campaign.audit} embedded />
+            </EvidencePanel>
           )}
         </motion.div>
       </div>

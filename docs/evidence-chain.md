@@ -2,7 +2,7 @@
 
 The campaign's **Audit log** tab contains **Verify evidence** and **Export evidence**. Verification reads the server's current state; the existing **Export campaign** button continues to export the browser's campaign view. Evidence exports contain the ordered evidence records and a saved head, including when verification fails, so an investigator can inspect the failure.
 
-Opening the audit tab loads and verifies evidence automatically. A compact integrity summary provides verification, export and a **View coverage** action. Coverage opens in a dialog with the exact recorded fields and values. The separate timeline initially shows five events; **Show more** reveals the rest of the page. Selecting an event opens **Overview**, **Recorded data** and **Proof** tabs, keeping hashes and signatures out of the main activity view. Earlier unsigned records identify the later signed checkpoint that includes them. Imported history retains its baseline notice. Failed verification is displayed explicitly. Activity notes are available in a collapsed section below the timeline.
+Opening the audit tab shows the original activity log immediately and verifies evidence automatically. A small status row above the log shows **Signed & verified**, unsigned status, or a verification failure. **Details** expands the optional controls to check again, inspect signed data, download evidence or browse its history. Cryptographic events and proof stay off the main view until requested. Disclosure and status changes use subtle animation and honor reduced-motion preferences. Imported history retains its baseline notice, and failures remain visible even with details closed.
 
 ## Setup
 
