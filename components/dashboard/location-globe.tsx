@@ -87,7 +87,7 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
         state.latitude = focus.latitude * (1 - eased)
         if (focus.progress === 1) {
           focus = null
-          alertUntil.current = time + 4000
+          alertUntil.current = time + 3100
         }
       }
       const presentingEvent = focus !== null || time < alertUntil.current
@@ -142,7 +142,7 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
         const p = project(location.latitude, location.longitude)
         if (p.z > 0) {
           const alertRemaining = Math.max(0, alertUntil.current - time)
-          const redPulse = reduced.matches ? 1 : (1 + Math.cos((4000 - alertRemaining) * Math.PI * 2 / 800)) / 2
+          const redPulse = reduced.matches ? 1 : (1 + Math.cos((3100 - alertRemaining) * Math.PI * 2 / 800)) / 2
           const alert = Math.min(1, alertRemaining / 400) * (reduced.matches ? 1 : 0.55 + redPulse * 0.45)
           const tint = (normal: number[], red: number[]) => normal.map((value, i) => Math.round(value + (red[i] - value) * alert)).join(',')
           const pulse = reduced.matches ? 0 : alertRemaining > 0 ? redPulse : (Math.sin(elapsed / 700) + 1) / 2
