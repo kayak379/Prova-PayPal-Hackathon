@@ -81,13 +81,13 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
       if (focus) {
         speed = 0
         state.velocityX = state.velocityY = 0
-        focus.progress = reduced.matches ? 1 : Math.min(1, focus.progress + delta / 1100)
+        focus.progress = reduced.matches ? 1 : Math.min(1, focus.progress + delta / 600)
         const eased = focus.progress ** 2 * (3 - 2 * focus.progress)
         state.longitude = focus.longitude + focus.turn * eased - spin
         state.latitude = focus.latitude * (1 - eased)
         if (focus.progress === 1) {
           focus = null
-          alertUntil.current = time + 1800
+          alertUntil.current = time + 4000
         }
       }
       const presentingEvent = focus !== null || time < alertUntil.current
@@ -141,13 +141,15 @@ export function LocationGlobe({ location, eventSignal = 0 }: { location?: Shippi
       if (location) {
         const p = project(location.latitude, location.longitude)
         if (p.z > 0) {
-          const alert = Math.max(0, Math.min(1, (alertUntil.current - time) / 400))
+          const alertRemaining = Math.max(0, alertUntil.current - time)
+          const redPulse = reduced.matches ? 1 : (1 + Math.cos((4000 - alertRemaining) * Math.PI * 2 / 800)) / 2
+          const alert = Math.min(1, alertRemaining / 400) * (reduced.matches ? 1 : 0.55 + redPulse * 0.45)
           const tint = (normal: number[], red: number[]) => normal.map((value, i) => Math.round(value + (red[i] - value) * alert)).join(',')
-          const pulse = reduced.matches ? 0 : (Math.sin(elapsed / 700) + 1) / 2
+          const pulse = reduced.matches ? 0 : alertRemaining > 0 ? redPulse : (Math.sin(elapsed / 700) + 1) / 2
           ctx!.globalAlpha = Math.min(1, p.z * 5)
           ctx!.strokeStyle = `rgba(${tint([225,245,195], [255,110,110])},.5)`; ctx!.lineWidth = 1
           ctx!.beginPath(); ctx!.arc(p.x, p.y, 6 + pulse * 4, 0, Math.PI * 2); ctx!.stroke()
-          ctx!.fillStyle = `rgb(${tint([236,247,202], [255,95,95])})`; ctx!.shadowColor = `rgb(${tint([220,244,173], [255,75,75])})`; ctx!.shadowBlur = 9
+          ctx!.fillStyle = `rgb(${tint([236,247,202], [255,95,95])})`; ctx!.shadowColor = `rgb(${tint([220,244,173], [255,75,75])})`; ctx!.shadowBlur = 9 + alert * 5
           ctx!.beginPath(); ctx!.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx!.fill()
           ctx!.shadowBlur = 0; ctx!.globalAlpha = 1
         }
