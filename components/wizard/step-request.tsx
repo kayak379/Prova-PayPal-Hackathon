@@ -18,12 +18,6 @@ import {
   type RequestAttachment,
 } from '@/lib/campaign-request'
 
-const EXAMPLES = [
-  'Category 4 hurricane, 2,000 displaced families in Houston. Need water, shelter and first aid for 3 days.',
-  'Wildfire evacuation center, 600 people, heavy smoke. Masks, water and blankets.',
-  'Flooding in a rural county, 400 households without power for a week.',
-]
-
 export function StepRequest({
   prompt,
   setPrompt,
@@ -200,26 +194,6 @@ export function StepRequest({
           </Pressable>
         </div>
       </motion.div>
-
-      <div className="flex flex-col gap-2">
-        {EXAMPLES.map((ex, i) => (
-          <motion.button
-            key={ex}
-            type="button"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              transition: { delay: 0.15 + i * 0.05 },
-            }}
-            whileTap={{ scale: 0.99 }}
-            onClick={() => setPrompt(ex)}
-            className="rounded-2xl border border-transparent px-4 py-3 text-left text-sm text-muted-foreground outline-none transition-colors hover:border-border hover:bg-card hover:text-foreground focus-visible:border-border focus-visible:bg-card"
-          >
-            {ex}
-          </motion.button>
-        ))}
-      </div>
     </div>
   )
 }
