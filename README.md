@@ -205,6 +205,49 @@ The finance assistant is a conversational agent behind `POST /api/finance/chat`.
 
 Preparation produces a signed action token that binds the campaign, source, amount, operation ID and applicable invoice preferences for 15 minutes. The user confirms the card through a separate request. Before confirmation, the browser saves pending operation metadata to PostgreSQL through the workspace API. The finance route loads and locks the campaign, revalidates the inputs, reuses PayPal request IDs so retries can recover an existing invoice or refund, and persists the result. Assistant status checks and reconciliation results are also saved by server routes. Guided finance controls use the same confirmation path and remain available during a model outage. [Finance service](lib/server/finance.ts) · [Finance route](app/api/finance/route.ts) · [Assistant route](app/api/finance/chat/route.ts)
 
+## Local setup
+
+Install Node.js 24 and pnpm 11.25.0 (the versions specified in `package.json`), and start PostgreSQL locally or use a hosted PostgreSQL database.
+
+**1. Install dependencies and copy the environment template.** From the repository root:
+
+```sh
+pnpm install
+cp .env.example .env.local
+```
+
+On PowerShell, you can use `Copy-Item .env.example .env.local` for the copy command.
+
+**2. Configure `.env.local`.** Create an empty database (for example, `createdb -U postgres prova` if PostgreSQL's CLI is installed), then fill in these values:
+
+| Variable | Local configuration |
+| --- | --- |
+| `DATABASE_URL` | Your connection string, for example `postgresql://postgres:YOUR_PASSWORD@localhost:5432/prova`. The database must exist before setup runs. |
+| `DEMO_EMAIL`, `DEMO_PASSWORD` | Credentials for the shared demo login. Keep the example email or choose your own, and set a password. |
+| `SESSION_SECRET` | A random secret of at least 32 characters; generate one with the command below. |
+| `OPENROUTER_API_KEY`, `GEMINI_API_KEY` | Keys for the primary AI provider and Gemini fallback. Model names can be changed with `OPENROUTER_MODEL` and `GEMINI_MODEL`. |
+| `CHANNEL3_API_KEY` | Product catalog access for supply discovery. |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | Credentials from a PayPal Sandbox app for checkout and finance features. |
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Paste the generated value into `SESSION_SECRET`. The optional preapproved wallet and evidence signing key can remain blank for initial setup.
+
+**3. Initialize the database and start the app.** Setup loads `.env.local`, applies migrations, and seeds the workspace while preserving existing data:
+
+```sh
+pnpm db:setup
+pnpm dev
+```
+
+Open [localhost:3000](http://localhost:3000) and sign in with `DEMO_EMAIL` and `DEMO_PASSWORD` from `.env.local`. Restart the dev server after changing environment variables.
+
+**4. Enable background integrations as needed.** For proactive disaster campaigns, generate a separate `DISASTER_WEBHOOK_SECRET` with the command above and run `pnpm disasters:worker` in a second terminal. The worker uses the same `.env.local` and database as the app. Send disaster events to `/api/disasters/webhook` with that bearer secret. For PayPal webhook updates, expose the local server through an HTTPS tunnel, register its `/api/paypal/webhook` URL in your PayPal Sandbox app, and set the resulting `PAYPAL_WEBHOOK_ID`.
+
+To check your changes, run `pnpm typecheck` and `pnpm test`. For a local production build, run `pnpm build` followed by `pnpm start`.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file in the repository for more details.
